@@ -43,7 +43,14 @@ def cmd_init_db(args):
 
 def cmd_config(args):
     cfg = _ctx(args)
+    from .config import validate
+    problems = validate(cfg)
     print("sources:", ", ".join(str(p) for p in cfg.sources))
+    for pr in problems:
+        print("  !", pr)
+    if args.check:
+        print("config OK" if not [x for x in problems if not x.startswith("note:")] else "config has problems")
+        return 0 if not [x for x in problems if not x.startswith("note:")] else 2
     print(f"host={cfg.host_name} role={cfg.role} data_dir={cfg.data_dir} db={cfg.db_path} dry_run={cfg.dry_run}")
     print(f"gpu.backend={cfg.get('gpu.backend')} miner.backend={cfg.get('miner.backend')} pool={cfg.get('pool.provider')}")
     unresolved = [s for s in json.dumps(cfg.data).split('"') if s.startswith("${")]
@@ -391,6 +398,52 @@ def cmd_schedule(args):
             print(line)
 
 
+# --- M7: services, secrets, sysadmin helpers -------------------------------------------------------
+def cmd_service(args):
+    cfg = _ctx(args)
+    from . import services
+    if args.sub in ("plan", "install"):
+        lines = services.install(cfg, apply=(args.sub == "install"))
+    elif args.sub == "uninstall":
+        lines = services.uninstall(cfg)
+    else:
+        lines = services.status(cfg)
+    print("\n".join(lines))
+
+
+def cmd_footprint(args):
+    _ctx(args)
+    from .services import footprint
+    rows = footprint()
+    tot = sum(r["rss_mb"] for r in rows)
+    for r in rows:
+        print(f"{r['pid']:>7} {r['rss_mb']:>8.1f} MB {r['cpu_pct']:>5.1f}%  {r['cmd']}")
+    print(f"total rig-overseer RSS: {tot:.0f} MB (budget ~1024 MB)")
+
+
+def cmd_secret(args):
+    cfg = _ctx(args)
+    from .secrets import get_secret, set_secret_store
+    if args.sub == "set":
+        import getpass
+        val = args.value or getpass.getpass(f"{args.name}: ")
+        print(f"{args.name} stored in {set_secret_store(args.name, val)}")
+    else:
+        names = ["RIG_WALLET_PRL", "RIG_WALLET_XTM", "RIG_WALLET_CFX", "NTFY_TOPIC", "NTFY_TOKEN", "RIG_HUB_TOKEN",
+                 "DASHBOARD_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "HEALTHCHECKS_URL"]
+        for n in names:
+            print(f"{n:24} {'set' if get_secret(n) else '-'}")
+
+
+def cmd_sys(args):
+    cfg = _ctx(args)
+    from . import sysadmin
+    if args.sub == "restore-point":
+        print("ok" if sysadmin.restore_point(cfg, args.desc) else "failed (see log)")
+    else:
+        print(sysadmin.log_change(cfg, args.who, args.desc, args.undo or "see change description"))
+
+
 def cmd_incidents(args):
     cfg = _ctx(args)
     db = Db(cfg.db_path)
@@ -419,7 +472,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", help="path to config.yaml (default: repo config.yaml + config.local.yaml)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db", help="create/migrate the database").set_defaults(fn=cmd_init_db)
-    sub.add_parser("config", help="show effective config and unresolved secrets").set_defaults(fn=cmd_config)
+    cf = sub.add_parser("config", help="show effective config, problems and unresolved secrets")
+    cf.add_argument("--check", action="store_true", help="exit 2 if the config has problems")
+    cf.set_defaults(fn=cmd_config)
     sub.add_parser("gpus", help="list GPUs with a live sample").set_defaults(fn=cmd_gpus)
     s = sub.add_parser("sensors", help="what this host can read/control; run on every new rig")
     s.add_argument("--probe-write", action="store_true", help="no-op writes to prove control works (needs control_enabled)")
@@ -498,6 +553,21 @@ def build_parser() -> argparse.ArgumentParser:
     sc = sub.add_parser("schedule", help="register the hourly/algo-check runs with the OS scheduler")
     sc.add_argument("sub", nargs="?", default="show", choices=["show", "plan", "install"])
     sc.set_defaults(fn=cmd_schedule)
+    sv = sub.add_parser("service", help="auto-start services: agent (all hosts) + web (hub)")
+    sv.add_argument("sub", nargs="?", default="status", choices=["plan", "install", "uninstall", "status"])
+    sv.set_defaults(fn=cmd_service)
+    sub.add_parser("footprint", help="RSS/CPU of rig-overseer processes").set_defaults(fn=cmd_footprint)
+    se = sub.add_parser("secret", help="store a secret (Credential Manager on Windows, secrets file elsewhere) or list which are set")
+    se.add_argument("sub", choices=["set", "list"])
+    se.add_argument("name", nargs="?")
+    se.add_argument("value", nargs="?")
+    se.set_defaults(fn=cmd_secret)
+    sy = sub.add_parser("sys", help="system-change helpers for incident runs: restore-point, log-change")
+    sy.add_argument("sub", choices=["restore-point", "log-change"])
+    sy.add_argument("desc")
+    sy.add_argument("--undo")
+    sy.add_argument("--who", default="claude")
+    sy.set_defaults(fn=cmd_sys)
     inc = sub.add_parser("incidents", help="recent incidents")
     inc.add_argument("--limit", type=int, default=20)
     inc.set_defaults(fn=cmd_incidents)

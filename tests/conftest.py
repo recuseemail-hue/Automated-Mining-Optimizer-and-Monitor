@@ -45,3 +45,16 @@ def stack(cfg, db):
     plat = get_platform(cfg)
     col = Collector(cfg, db, gpu, miner, plat, pool=None)
     return cfg, db, gpu, miner, col
+
+
+@pytest.fixture(autouse=True)
+def _never_touch_the_host(monkeypatch):
+    """Tests must never shut down / reboot the machine running them or call the network."""
+    from agent.platform import linux, windows
+    from agent import heartbeat
+    calls = []
+    for cls in (linux.LinuxPlatform, windows.WindowsPlatform):
+        monkeypatch.setattr(cls, "shutdown", lambda self, reason, delay_s=30: calls.append(("shutdown", reason)))
+        monkeypatch.setattr(cls, "reboot", lambda self, reason, delay_s=30: calls.append(("reboot", reason)))
+    monkeypatch.setattr(heartbeat.Heartbeat, "_fetch", staticmethod(lambda url, body=None: calls.append(("ping", url))))
+    return calls

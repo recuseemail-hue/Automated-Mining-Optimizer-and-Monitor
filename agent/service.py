@@ -64,6 +64,8 @@ def boot_restore(stack: dict) -> dict:
 def run(cfg: Config) -> None:
     secrets.configure(cfg.secrets_file)
     setup_logging(cfg.data_dir, "agent", cfg.get("logging.level", "INFO"))
+    from .services import lower_priority
+    lower_priority()
     stack = build(cfg)
     boot_restore(stack)
     stop = threading.Event()

@@ -241,6 +241,8 @@ def serve(cfg: Config) -> None:
 
     secrets.configure(cfg.secrets_file)
     setup_logging(cfg.data_dir, "web", cfg.get("logging.level", "INFO"))
+    from agent.services import lower_priority
+    lower_priority()
     if not cfg.is_hub:
         raise SystemExit("the web server runs on the hub only (host.role: hub)")
     host, port = str(cfg.get("hub.bind", "127.0.0.1")), int(cfg.get("hub.port", 8080))

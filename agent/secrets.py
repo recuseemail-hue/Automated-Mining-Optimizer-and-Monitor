@@ -37,8 +37,70 @@ def _load_file() -> dict[str, str]:
     return out
 
 
+CRED_PREFIX = "rig-overseer/"
+
+
+def _cred_read(name: str) -> str | None:
+    """Windows Credential Manager generic credential 'rig-overseer/<NAME>' (stored with `rigctl secret set`)."""
+    if os.name != "nt":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class CREDENTIAL(ctypes.Structure):
+        _fields_ = [("Flags", wintypes.DWORD), ("Type", wintypes.DWORD), ("TargetName", wintypes.LPWSTR),
+                    ("Comment", wintypes.LPWSTR), ("LastWritten", wintypes.FILETIME), ("CredentialBlobSize", wintypes.DWORD),
+                    ("CredentialBlob", ctypes.POINTER(ctypes.c_byte)), ("Persist", wintypes.DWORD),
+                    ("AttributeCount", wintypes.DWORD), ("Attributes", ctypes.c_void_p), ("TargetAlias", wintypes.LPWSTR),
+                    ("UserName", wintypes.LPWSTR)]
+    adv = ctypes.windll.advapi32
+    pcred = ctypes.POINTER(CREDENTIAL)()
+    if not adv.CredReadW(CRED_PREFIX + name, 1, 0, ctypes.byref(pcred)):
+        return None
+    try:
+        c = pcred.contents
+        return ctypes.string_at(c.CredentialBlob, c.CredentialBlobSize).decode("utf-16-le")
+    finally:
+        adv.CredFree(pcred)
+
+
+def set_secret_store(name: str, value: str) -> str:
+    """Store a secret: Credential Manager on Windows, else the secrets file (mode 600). Returns where."""
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        class CREDENTIAL(ctypes.Structure):
+            _fields_ = [("Flags", wintypes.DWORD), ("Type", wintypes.DWORD), ("TargetName", wintypes.LPWSTR),
+                        ("Comment", wintypes.LPWSTR), ("LastWritten", wintypes.FILETIME), ("CredentialBlobSize", wintypes.DWORD),
+                        ("CredentialBlob", ctypes.c_void_p), ("Persist", wintypes.DWORD), ("AttributeCount", wintypes.DWORD),
+                        ("Attributes", ctypes.c_void_p), ("TargetAlias", wintypes.LPWSTR), ("UserName", wintypes.LPWSTR)]
+        blob = value.encode("utf-16-le")
+        buf = ctypes.create_string_buffer(blob, len(blob))
+        cred = CREDENTIAL(0, 1, CRED_PREFIX + name, "rig-overseer secret", wintypes.FILETIME(), len(blob),
+                          ctypes.cast(buf, ctypes.c_void_p), 2, 0, None, None, "rig-overseer")
+        if not ctypes.windll.advapi32.CredWriteW(ctypes.byref(cred), 0):
+            raise OSError(f"CredWriteW failed ({ctypes.GetLastError()})")
+        return "Windows Credential Manager"
+    if _file_path is None:
+        raise RuntimeError("secrets file path not configured")
+    lines = []
+    if _file_path.is_file():
+        lines = [ln for ln in _file_path.read_text(encoding="utf-8").splitlines() if not ln.startswith(name + "=")]
+    lines.append(f"{name}={value}")
+    _file_path.parent.mkdir(parents=True, exist_ok=True)
+    _file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        os.chmod(_file_path, 0o600)
+    except OSError:
+        pass
+    global _file_cache
+    _file_cache = None
+    return str(_file_path)
+
+
 def get_secret(name: str, default: str | None = None) -> str | None:
-    val = os.environ.get(name) or _load_file().get(name) or default
+    val = os.environ.get(name) or _load_file().get(name) or _cred_read(name) or default
     if val:
         _known_values.add(val)
     return val

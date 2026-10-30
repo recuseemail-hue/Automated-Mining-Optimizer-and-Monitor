@@ -118,6 +118,52 @@ class Config:
         return copy.deepcopy(base)
 
 
+def validate(cfg: "Config") -> list[str]:
+    """Human-readable problems; empty list means the config is usable."""
+    errs: list[str] = []
+    try:
+        cfg.role
+    except ValueError as e:
+        errs.append(str(e))
+    for name, c in [("default", cfg.get("clamps.default", {}))] + list((cfg.get("clamps.models", {}) or {}).items()):
+        m = _deep_merge(cfg.get("clamps.default", {}), c) if name != "default" else c
+        for key in ("power_limit_pct", "core_lock_mhz", "core_offset_mhz", "mem_offset_mhz", "fan_pct"):
+            v = m.get(key)
+            if not (isinstance(v, list) and len(v) == 2 and v[0] <= v[1]):
+                errs.append(f"clamps.{name}.{key} must be [lo, hi]")
+        if m.get("power_limit_pct", [0, 0])[0] < 40:
+            errs.append(f"clamps.{name}.power_limit_pct floor below 40% is unsafe for the VRM")
+        if m.get("fan_pct", [0, 0])[0] < 30:
+            errs.append(f"clamps.{name}.fan_pct floor below 30%")
+        for key in ("power_limit_step_pct", "core_step_mhz", "mem_step_mhz", "fan_step_pct"):
+            if not isinstance(m.get(key), (int, float)) or m[key] <= 0:
+                errs.append(f"clamps.{name}.{key} must be > 0")
+    t = cfg.get("targets", {})
+    w = cfg.get("watchdog", {})
+    if not (t.get("core_c_max", 0) < w.get("core_c_crit", 0) < w.get("core_c_hard", 0)):
+        errs.append("targets.core_c_max < watchdog.core_c_crit < watchdog.core_c_hard required")
+    if not (t.get("memj_c_max", 0) < w.get("memj_c_crit", 0) < w.get("memj_c_hard", 0)):
+        errs.append("targets.memj_c_max < watchdog.memj_c_crit < watchdog.memj_c_hard required")
+    for coin, c in (cfg.get("coins", {}) or {}).items():
+        for k in ("algo", "miner", "pool"):
+            if not c.get(k):
+                errs.append(f"coins.{coin}.{k} missing")
+    if cfg.get("miner.coin") not in (cfg.get("coins", {}) or {}):
+        errs.append(f"miner.coin {cfg.get('miner.coin')!r} is not in the coins catalog")
+    seen = set()
+    for g in cfg.get("gpus", []) or []:
+        if not g.get("uuid"):
+            errs.append("gpus[] entry without uuid")
+        elif g["uuid"] in seen:
+            errs.append(f"duplicate gpus[] uuid {g['uuid']}")
+        seen.add(g.get("uuid"))
+    if cfg.role == "worker" and str(cfg.get("hub.url", "")).startswith("http://127.0.0.1"):
+        errs.append("worker role but hub.url still points at localhost")
+    if not cfg.dry_run and not any(g.get("control_enabled") for g in cfg.get("gpus", []) or []):
+        errs.append("note: dry_run is off but no GPU has control_enabled=true (nothing will be controlled)")
+    return errs
+
+
 def load_config(path: str | os.PathLike | None = None) -> Config:
     sources: list[Path] = []
     data: dict = {}
