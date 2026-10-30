@@ -15,6 +15,8 @@ from .config import Config
 from .db import Db
 from .forwarder import Forwarder
 from .gpu import make_backend
+from .heartbeat import Heartbeat
+from .incidents import IncidentEscalator
 from .log import setup_logging
 from .miner import make_miner
 from .notify import Notifier
@@ -30,15 +32,20 @@ def build(cfg: Config, *, clock=time.time, on_incident=None) -> dict:
     db = Db(cfg.db_path)
     gpu = make_backend(cfg)
     miner = make_miner(cfg, gpu)
+    ov = db.kv_get("miner.coin_override")
+    if ov and hasattr(miner, "coin_override"):
+        miner.coin_override = ov
     plat = get_platform(cfg)
     pool = make_pool(cfg, db)
     col = Collector(cfg, db, gpu, miner, plat, pool)
     notifier = Notifier(cfg, db, clock=clock)
-    actions = Actions(cfg, db, gpu, miner, plat, col.host_id, notifier=notifier, clock=clock)
+    heartbeat = Heartbeat(cfg, clock=clock)
+    actions = Actions(cfg, db, gpu, miner, plat, col.host_id, notifier=notifier, clock=clock, heartbeat=heartbeat)
     trials = TrialManager(cfg, db, actions, clock=clock)
-    wd = Watchdog(cfg, db, col, actions, trials, notifier, clock=clock, on_incident=on_incident)
+    escalator = IncidentEscalator(cfg, db, notifier, clock=clock)
+    wd = Watchdog(cfg, db, col, actions, trials, notifier, clock=clock, on_incident=on_incident or escalator.on_incident)
     return {"db": db, "gpu": gpu, "miner": miner, "plat": plat, "pool": pool, "collector": col, "notifier": notifier,
-            "actions": actions, "trials": trials, "watchdog": wd}
+            "actions": actions, "trials": trials, "watchdog": wd, "escalator": escalator, "heartbeat": heartbeat}
 
 
 def boot_restore(stack: dict) -> dict:
@@ -74,6 +81,7 @@ def run(cfg: Config) -> None:
         threading.Thread(target=stack["watchdog"].run_loop, args=(stop,), name="watchdog", daemon=True),
         threading.Thread(target=stack["collector"].run_loop, name="collector", daemon=True),
     ]
+    threads.append(threading.Thread(target=stack["heartbeat"].run_loop, args=(stop,), name="heartbeat", daemon=True))
     if cfg.role == "worker":
         fw = Forwarder(cfg, stack["db"])
         threads.append(threading.Thread(target=fw.run_loop, name="forwarder", daemon=True))

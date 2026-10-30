@@ -5,7 +5,7 @@ bounded per-GPU tuning, coin selection with hysteresis, a phone-friendly dashboa
 the decision layer for scheduled reviews and incidents. Hub/worker: one rig hosts the dashboard and
 DB; every other rig (and later the laptops) runs the agent only and forwards to the hub.
 
-Status: **M1 telemetry + DB**, **M2 watchdog + action API**, **M3 dashboard + API** done. M4–M7 pending. Observe-only by default.
+Status: M1 telemetry + DB, M2 watchdog + action API, M3 dashboard, M4 /optimize, M5 scheduled Claude tasks, **M6 incident escalation** done. M7 (services, hardening, docs) pending. Observe-only by default.
 
 ## Install (per host)
 ```bash
@@ -34,7 +34,31 @@ rigctl act pl 230 --gpu 0 --reason "..."     # clamped, logged control action (d
 rigctl trial start --gpu 0 --key mem_offset_mhz --value 100 --hold 900   # self-reverting trial
 rigctl profile show --gpu 0 | rigctl incidents | rigctl actions
 rigctl web               # hub only: API + dashboard on hub.bind:hub.port (becomes a service in M7)
+rigctl optimize --gpu 0 --goal max-efficiency   # time-boxed tuning (45 min/GPU, 3 h rig cap); also /optimize in Claude Code
+rigctl tune --pretty     # hourly deterministic pre-check: candidates, triggers, proposed step
+rigctl coins table       # profitability table + hysteresis decision; `coins probe` raw source JSON
+rigctl claude-run hourly --dry      # print the exact claude command + prompt without calling Claude
+rigctl schedule install  # register hourly + algo-check runs with Task Scheduler / write systemd timers
 ```
+
+## Scheduled Claude runs (hub)
+- Local headless `claude -p` jobs started by the OS scheduler; no cloud scheduled tasks. Each run gets a
+  standalone prompt from `tasks/<task>.md` plus a context JSON built by code. Tools are restricted to the
+  listed `rigctl` commands (`agent/claude_runner.py: TOOLS`); every action is tagged with the run id and
+  shown on the Claude page of the dashboard.
+- Auth: `claude setup-token` on the hub (Pro/Max subscription) → `CLAUDE_CODE_OAUTH_TOKEN=...` in the secrets
+  file. An `ANTHROPIC_API_KEY` works too and is then capped per run by `claude.max_budget_usd`.
+- Requires the Claude Code CLI on PATH and, on Windows, Git for Windows (the Bash tool is what the
+  permission rules target).
+- Gates: `claude.daily_cap` (incidents may go to 2×), `claude.min_free_ram_mb` (scheduled runs only),
+  `claude.hourly_gating` (no LLM call when the pre-check finds no candidate; the run is still logged).
+- Incidents: the watchdog acts first (local ladder, no network), pushes to the phone, then launches
+  `rigctl claude-run incident --incident <id>` detached (one run per incident, min 15 min between launches,
+  `claude.incident_runs`). The run's summary is pushed to the phone and linked on the Incidents page.
+- Off-box heartbeat: put a healthchecks.io ping URL in secret `HEALTHCHECKS_URL`; the agent pings every 5 min
+  and hits `/fail` with the reason right before any watchdog shutdown.
+- Optimizer time budget: 10 min baseline, then the remaining window is split evenly across strategies
+  A/B/C; with 5-min holds that is about 2 steps per strategy inside 45 min (`optimize.*` to change).
 
 ## Dashboard (hub)
 - Secrets on the hub: `DASHBOARD_PASSWORD` (UI login), `RIG_HUB_TOKEN` (workers' ingest + API bearer).

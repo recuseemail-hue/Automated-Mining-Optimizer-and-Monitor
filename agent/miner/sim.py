@@ -47,10 +47,18 @@ class SimMiner(MinerBackend):
         st["paused"] = [i for i in st["paused"] if i != index]
         self._save(st)
 
+    coin_override: str | None = None
+
+    def active_coin(self) -> dict:
+        coin = self.coin_override or self.cfg.get("miner.coin", "PRL")
+        cat = (self.cfg.get("coins", {}) or {}).get(coin, {})
+        return {"coin": coin, "algo": cat.get("algo", "pearl"), "pool": cat.get("pool"), "dev_fee_pct": cat.get("dev_fee_pct", 3.0)}
+
     def stats(self) -> MinerStats:
         st = self._load()
+        coin = self.active_coin()["coin"]
         if not st.get("running"):
-            return MinerStats(state="stopped", coin=self.cfg.get("miner.coin"))
+            return MinerStats(state="stopped", coin=coin)
         gpus = []
         total = 0.0
         for info in self.gpu.enumerate():
@@ -70,7 +78,7 @@ class SimMiner(MinerBackend):
             total += hr
         self._save(st)
         return MinerStats(state="paused" if gpus and all(g.paused for g in gpus) else "running",
-                          coin=self.cfg.get("miner.coin"), algo=self.cfg.get("miner.algo"),
-                          pool=self.cfg.get("miner.pool"), worker="sim", uptime_s=time.time() - st["started"],
+                          coin=coin, algo=self.active_coin()["algo"],
+                          pool=self.active_coin()["pool"], worker="sim", uptime_s=time.time() - st["started"],
                           version="sim", total_hashrate=total, accepted=sum(g.accepted for g in gpus),
                           rejected=sum(g.rejected for g in gpus), gpus=gpus)

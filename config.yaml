@@ -80,6 +80,56 @@ economics:
   kwh_usd: 0.0
   switch_downtime_min: 5
 
+# Coin catalog for the algorithm check. Only auto_switch: true coins may be switched to without the
+# owner's OK. Each entry carries the miner command fragments for that coin. Wallet = secret RIG_WALLET_<COIN>.
+coins:
+  PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 3.0, auto_switch: true,
+         fork_sensitive: true}                # PIP-3 (FP8) would end RTX 30/40 mining; see selector.fork
+  XTM:  {name: Tari C29, algo: cuckaroo29, miner: peakminer, pool: xtm.kryptex.network:7033, dev_fee_pct: 3.0, auto_switch: true}
+  CFX:  {name: Conflux, algo: octopus, miner: peakminer, pool: cfx.kryptex.network:7030, dev_fee_pct: 3.0, auto_switch: true}
+  QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: qtc.kryptex.network:7040, dev_fee_pct: 3.0, auto_switch: false}
+  IRON: {name: IronFish, algo: fishhash, miner: peakminer, pool: iron.kryptex.network:7024, dev_fee_pct: 3.0, auto_switch: false}
+
+selector:
+  schedule: daily                 # daily | weekly (scheduler registration)
+  min_gain_pct: 15                # switch only if the best alternative beats the current coin by this much ...
+  consecutive_checks: 2           # ... on this many consecutive checks
+  max_data_age_s: 21600           # never act on profitability data older than 6 h
+  # Profitability source. `manual` uses the seed table below (dashboard/tests only; it is never fresh
+  # enough to trigger a switch). `http_json` is a generic fetcher: UNVERIFIED example for minerstat;
+  # run `rigctl coins probe` on the rig and fix the field paths, then set verified: true.
+  source:
+    provider: manual              # manual | http_json
+    url: https://api.minerstat.com/v2/coins?list=${COINS}
+    fields: {list: "", coin: coin, reward_per_unit_day: reward, unit: reward_unit, price_usd: price, updated: updated}
+    verified: false
+  # Expected hashrate (H/s) and power (W) per GPU model per coin: the tuner updates these from telemetry;
+  # seed values from Oct 30 2026 (Kryptex, RTX 3080).
+  seed:
+    as_of: "2026-10-30"
+    "RTX 3080":
+      PRL:  {hashrate: 105e12, power_w: 240, gross_usd_day: 2.11}
+      QTC:  {hashrate: 488e6,  power_w: 165, gross_usd_day: 1.69}
+      XTM:  {hashrate: 1,      power_w: 192, gross_usd_day: 0.94}
+      CFX:  {hashrate: 1,      power_w: 250, gross_usd_day: 0.79}
+      IRON: {hashrate: 1,      power_w: 230, gross_usd_day: 0.45}
+  fork:                           # Pearl PIP-3 watch; the daily check updates these via rigctl coins fork
+    activation_height: null       # null = none announced
+    minable_after_fork: ["RTX 50", "RTX PRO 6000", "H100", "H200", "B200", "B300"]
+
+claude:
+  bin: claude                     # Claude Code CLI on PATH (subscription token in secret CLAUDE_CODE_OAUTH_TOKEN)
+  model: null                     # null = CLI default
+  daily_cap: 10                   # scheduled + incident runs per day; incidents always run until 2x cap
+  timeout_s: 900
+  max_turns: 25
+  max_budget_usd: 0.50            # only applied when an API key (not a subscription token) is used
+  min_free_ram_mb: 1500           # scheduled runs are skipped below this; incident runs are not
+  hourly_gating: true             # skip the LLM call when the deterministic pre-check finds no candidate
+  schedule:
+    hourly: "5 * * * *"           # minute 5 every hour (cron form; translated for Task Scheduler)
+    algo_check: "30 3 * * *"      # 03:30 daily (weekly: "30 3 * * 1")
+
 # Target operating envelope. Per-GPU overrides under gpus[].targets.
 targets:
   core_c_max: 75
@@ -157,6 +207,27 @@ tuning:
     trigger_eff_drop_pct: 5
   baseline_window_s: 900
   settle_s: 90                   # samples in the first settle_s after a change are ignored
+
+optimize:                        # rigctl optimize / the /optimize slash command
+  per_gpu_s: 2700                # hard window per GPU (45 min)
+  rig_cap_s: 10800               # rig-wide cap (3 h)
+  baseline_s: 600                # record current performance first
+  hold_s: 300                    # per step (5-8 min is a stable reading); 45 min window -> ~2 steps per strategy
+  steps: 4                       # max steps per strategy; the time budget usually cuts this
+  worse_margin_pct: 3            # a step this much worse than baseline is reverted and ends the strategy
+  default_goal: max-efficiency   # max-hashrate | max-efficiency | target-temp
+  strategies:                    # per-model overrides under clamps.models.<name>.optimize_strategies
+    A:                           # efficiency undervolt: lower core lock + reduced power limit + moderate memory
+      pl_pct: [75, 70, 65, 60]
+      core_lock_mhz: [1500, 1440, 1380, 1320]
+      mem_offset_mhz: 300
+    B:                           # max hashrate: stock power limit, core and memory offsets stepping up
+      pl_pct: 100
+      core_offset_mhz: [0, 30, 60, 90]
+      mem_offset_mhz: [300, 500, 700, 900]
+    C:                           # balanced / cool: mid power limit stepping down to the temperature target
+      pl_pct: [80, 75, 70, 65]
+      mem_offset_mhz: 200
 
 gpus: []                         # per-GPU: {uuid, name, control_enabled, targets: {...}}
 #  - uuid: GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

@@ -129,15 +129,24 @@ class PeakMiner(MinerBackend):
         return self.stats().state in ("running", "paused")
 
     # --- process control (used by the M2 action layer; never called by the collector) --------
+    def active_coin(self) -> dict:
+        """Current coin + its catalog entry; a switch sets kv miner.coin_override (read via the db hook)."""
+        coin = self.cfg.get("miner.coin", "PRL")
+        override = getattr(self, "coin_override", None)
+        if override:
+            coin = override
+        cat = (self.cfg.get("coins", {}) or {}).get(coin, {})
+        return {"coin": coin, "algo": cat.get("algo", self.cfg.get("miner.algo", "pearl")),
+                "pool": cat.get("pool", self.cfg.get("miner.pool")), "dev_fee_pct": cat.get("dev_fee_pct", self.cfg.get("miner.dev_fee_pct"))}
+
     def command(self) -> list[str]:
         from ..secrets import wallet_for
-        coin = self.cfg.get("miner.coin", "PRL")
-        wallet = wallet_for(coin) or "${WALLET_MISSING}"
+        ac = self.active_coin()
+        wallet = wallet_for(ac["coin"]) or "${WALLET_MISSING}"
         worker = self.cfg.get("miner.worker") or os.environ.get("COMPUTERNAME") or "rig"
         port = self.api_url.split(":")[-1].split("/")[0]
         # Flag names follow the PeakMiner wiki; verified on the rig in M2.
-        cmd = [str(self.exe), "--algo", self.cfg.get("miner.algo", "pearl"),
-               "--pool", self.cfg.get("miner.pool"), "--wallet", wallet, "--worker", worker,
+        cmd = [str(self.exe), "--algo", ac["algo"], "--pool", ac["pool"], "--wallet", wallet, "--worker", worker,
                "--api-port", port]
         cmd += list(self.cfg.get("miner.extra_args", []) or [])
         return cmd

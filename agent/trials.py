@@ -42,7 +42,7 @@ class TrialManager:
     # --- lifecycle -------------------------------------------------------------------------
     def start(self, uuid: str, setting: dict, hold_s: float, *, kind: str = "hourly", actor: str = "trial_manager",
               reason: str = "", run_id: str | None = None, strategy: str | None = None, step: int | None = None,
-              goal: str = "max-efficiency", baseline: Window | None = None) -> dict:
+              goal: str = "max-efficiency", baseline: Window | None = None, stepped: bool = False) -> dict:
         """Apply one setting change as a trial. Returns the trial row dict, or {'error': ...} if refused."""
         gpu_id = self.db.gpu_id(uuid)
         if gpu_id is None:
@@ -55,8 +55,11 @@ class TrialManager:
         base = baseline or self.baseline(gpu_id)
         if base.n == 0:
             return {"error": "no baseline samples"}
-        results = self.actions.apply_settings(uuid, {**pre, **setting}, actor, f"trial start: {reason}", run_id=run_id,
-                                              emergency=False)
+        if stepped:
+            results = self.actions.apply_settings_stepped(uuid, {**pre, **setting}, actor, f"trial start: {reason}", run_id=run_id)
+        else:
+            results = self.actions.apply_settings(uuid, {**pre, **setting}, actor, f"trial start: {reason}", run_id=run_id,
+                                                  emergency=False)
         failed = [r for r in results if not r.ok]
         if failed:
             # roll back anything that did apply, then refuse
@@ -85,6 +88,8 @@ class TrialManager:
         gpu_id = trial["gpu_id"]
         uuid = self.db.one("SELECT uuid FROM gpus WHERE id=?", (gpu_id,))["uuid"]
         keep = result["verdict"] == "better"
+        if trial.get("kind") == "hourly":
+            self._track_convergence(gpu_id, uuid, keep, result)
         if keep:
             settings = {**trial["baseline"]["settings"], **trial["setting"]}
             self.db.save_profile(gpu_id, settings, "active", goal=result.get("goal"), score=result.get("window"),
@@ -98,12 +103,40 @@ class TrialManager:
         log.info("trial %s reverted (%s)", trial["id"], result["reasons"])
         return "reverted"
 
+    def revert(self, trial: dict, verdict: str, result: dict | None, reason: str, *, actor: str = "trial_manager",
+               run_id: str | None = None) -> None:
+        """Restore the pre-trial settings and close the trial with an explicit verdict (optimizer steps)."""
+        uuid = self.db.one("SELECT uuid FROM gpus WHERE id=?", (trial["gpu_id"],))["uuid"]
+        self.actions.apply_settings(uuid, trial["baseline"]["settings"], actor, f"trial {trial['id']} {verdict}: {reason}", run_id=run_id)
+        self.db.close_trial(trial["id"], verdict, result, reason, self.clock())
+
+    def _track_convergence(self, gpu_id: int, uuid: str, improved: bool, result: dict) -> None:
+        """3 consecutive hourly trials without meaningful improvement -> converged for N days."""
+        key = f"tune.{uuid}.noimprove"
+        n = 0 if improved else int(self.db.kv_get(key, 0)) + 1
+        self.db.kv_set(key, n)
+        limit = int(self.cfg.get("tuning.hourly.converge_after", 3))
+        if n >= limit:
+            days = float(self.cfg.get("tuning.hourly.converged_days", 7))
+            settings = (self.db.profile(gpu_id, "active") or self.db.profile(gpu_id, "known_good") or {}).get("settings") \
+                or self.actions.settings(uuid)
+            self.db.save_profile(gpu_id, settings, "converged", created_by="trial_manager",
+                                 converged_until=self.clock() + days * 86400, score=result.get("window"),
+                                 note=f"{n} consecutive trials without >= min improvement")
+            self.db.kv_set(key, 0)
+            log.info("GPU %s converged for %.0f days", uuid, days)
+
     def tick(self) -> list[dict]:
-        """Judge every open trial whose deadline has passed. Called by the watchdog loop."""
+        """Judge every open trial whose deadline has passed. Called by the watchdog loop.
+        An optimizer trial past its deadline means the optimizer died: it is always reverted, never kept."""
         done = []
         now = self.clock()
         for t in self.db.open_trials():
             if t["deadline"] <= now:
+                if t["kind"] == "optimize":
+                    self.revert(t, "reverted", None, "optimizer missed deadline (crashed or interrupted)")
+                    done.append({"trial": t["id"], "verdict": "reverted", "reasons": ["optimizer missed deadline"]})
+                    continue
                 res = self.judge(t)
                 verdict = self.finish(t, res)
                 done.append({"trial": t["id"], "verdict": verdict, **res})

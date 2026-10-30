@@ -8,6 +8,7 @@ Clamps are never bypassed. Step limits are bypassed only for emergencies and pro
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -57,10 +58,15 @@ class ActionResult:
 
 class Actions:
     def __init__(self, cfg: Config, db: Db, gpu: GpuBackend, miner: MinerBackend, plat: Platform, host_id: int,
-                 notifier=None, clock=time.time):
+                 notifier=None, clock=time.time, heartbeat=None):
         self.cfg, self.db, self.gpu, self.miner, self.plat, self.host_id = cfg, db, gpu, miner, plat, host_id
-        self.notifier, self.clock = notifier, clock
+        self.notifier, self.clock, self.heartbeat = notifier, clock, heartbeat
         self._infos: dict[str, GpuInfo] = {}
+        # a Claude run exports RIG_RUN_ID so every rigctl call it makes is tagged with the run
+        self.default_run_id = os.environ.get("RIG_RUN_ID")
+        ov = db.kv_get("miner.coin_override")
+        if ov and hasattr(miner, "coin_override"):
+            miner.coin_override = ov
 
     # --- helpers --------------------------------------------------------------------------
     def info(self, uuid: str) -> GpuInfo:
@@ -98,6 +104,7 @@ class Actions:
     def _log(self, action: str, actor: str, ok: bool, dry: bool, *, uuid: str | None, params: dict, before: Any,
              after: Any, reason: str | None, run_id: str | None, error: str | None) -> ActionResult:
         gid = self.db.gpu_id(uuid) if uuid else None
+        run_id = run_id or self.default_run_id
         rid = self.db.log_action(action, actor, ok, dry, host_id=self.host_id, gpu_id=gid, params=params,
                                  before=before, after=after, reason=reason, run_id=run_id, error=error, ts=self.clock())
         res = ActionResult(action, ok, dry, params, before, after, error, rid)
@@ -278,6 +285,47 @@ class Actions:
             out.append(self.set_fan(uuid, settings["fan_pct"], actor, reason, run_id=run_id, emergency=emergency))
         return out
 
+    def apply_settings_stepped(self, ref: str | int, target: dict, actor: str, reason: str, *,
+                               run_id: str | None = None) -> list[ActionResult]:
+        """Reach `target` through a chain of actions that each respect the per-change step limit.
+        Used by the optimizer so every audit row stays inside the clamp *and* the step rule."""
+        uuid = self.resolve(ref)
+        c = self.clamps(uuid)
+        info = self.info(uuid)
+        out: list[ActionResult] = []
+        cur = self.settings(uuid)
+
+        def walk(key, setter, step):
+            start, goal = cur.get(key), target.get(key)
+            if goal is None or start is None:
+                return
+            n = max(1, int(abs(goal - start) / step + 0.999999))
+            for i in range(1, n + 1):
+                v = goal if i == n else start + (goal - start) * i / n
+                v = round(v, 1) if key == "pl_w" else int(round(v))
+                r = setter(v)
+                out.append(r)
+                if not r.ok:
+                    return
+
+        walk("pl_w", lambda v: self.set_power_limit(uuid, v, actor, reason, run_id=run_id),
+             (info.stock_pl_w or 1) * c["power_limit_step_pct"] / 100)
+        if "core_lock_mhz" in target and target["core_lock_mhz"] != cur.get("core_lock_mhz"):
+            if target["core_lock_mhz"] is None:
+                out.append(self.reset_core_lock(uuid, actor, reason, run_id=run_id))
+            elif cur.get("core_lock_mhz") is None:
+                out.append(self.set_core_lock(uuid, target["core_lock_mhz"], actor, reason, run_id=run_id))
+            else:
+                walk("core_lock_mhz", lambda v: self.set_core_lock(uuid, v, actor, reason, run_id=run_id), c["core_step_mhz"])
+        walk("core_offset_mhz", lambda v: self.set_core_offset(uuid, v, actor, reason, run_id=run_id), c["core_step_mhz"])
+        walk("mem_offset_mhz", lambda v: self.set_mem_offset(uuid, v, actor, reason, run_id=run_id), c["mem_step_mhz"])
+        if "fan_pct" in target and target["fan_pct"] != cur.get("fan_pct"):
+            if target["fan_pct"] is None or cur.get("fan_pct") is None:
+                out.append(self.set_fan(uuid, target["fan_pct"], actor, reason, run_id=run_id))
+            else:
+                walk("fan_pct", lambda v: self.set_fan(uuid, v, actor, reason, run_id=run_id), c["fan_step_pct"])
+        return out
+
     # --- miner ------------------------------------------------------------------------------
     def miner_start(self, actor: str, reason: str, *, run_id: str | None = None, emergency: bool = False) -> ActionResult:
         return self._run("miner_start", actor, uuid=None, params={}, reason=reason, run_id=run_id, emergency=emergency,
@@ -331,11 +379,17 @@ class Actions:
                 self._rate("switch_coin", lim, 86400)
 
         def apply():
-            raise ActionError("coin switching is implemented in M5")
+            from .secrets import wallet_for
+            if not wallet_for(coin):
+                raise ActionError(f"no wallet secret RIG_WALLET_{coin.upper()} for {coin}")
+            self.miner.stop()
+            self.miner.coin_override = coin
+            self.db.kv_set("miner.coin_override", coin)
+            self.miner.start()
 
         return self._run("switch_coin", actor, uuid=None, params={"coin": coin}, reason=reason, run_id=run_id,
-                         emergency=False, before_fn=lambda: self.cfg.get("miner.coin"), apply_fn=apply,
-                         after_fn=lambda: coin, check_fn=check)
+                         emergency=False, before_fn=lambda: self.miner.active_coin()["coin"], apply_fn=apply,
+                         after_fn=lambda: self.miner.active_coin()["coin"], check_fn=check)
 
     # --- power ------------------------------------------------------------------------------
     def reboot(self, actor: str, reason: str, *, run_id: str | None = None, emergency: bool = False) -> ActionResult:
@@ -356,7 +410,10 @@ class Actions:
                          after_fn=lambda: "shutting_down", check_fn=check)
 
     def _power(self, kind: str, reason: str) -> None:
+        """Push to the phone and flag the off-box heartbeat BEFORE the OS call, since the dashboard dies with the rig."""
         delay = int(self.cfg.get("safety.shutdown_notice_s", 45))
         if self.notifier:
             self.notifier.push(f"{self.cfg.host_name}: {kind} in {delay}s", reason, priority="urgent", tags="warning")
+        if self.heartbeat:
+            self.heartbeat.fail(f"{kind}: {reason}")
         getattr(self.plat, kind)(reason, delay_s=delay)

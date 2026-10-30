@@ -285,6 +285,112 @@ def cmd_web(args):
     serve(cfg)
 
 
+def cmd_optimize(args):
+    """Time-boxed per-GPU optimization. One GPU at a time; every step is a self-reverting trial."""
+    cfg, st = _live(args)
+    from .optimizer import Optimizer, format_report
+    o = cfg.data.setdefault("optimize", {})
+    if args.window_min:
+        o["per_gpu_s"] = args.window_min * 60
+    if args.cap_min:
+        o["rig_cap_s"] = args.cap_min * 60
+    if args.hold_min:
+        o["hold_s"] = args.hold_min * 60
+    if args.steps:
+        o["steps"] = args.steps
+    opt = Optimizer(cfg, st["db"], st["actions"], st["trials"], st["collector"])
+    a = st["actions"]
+    uuids = [i.uuid for i in st["gpu"].enumerate()] if args.gpu in (None, "all") else [a.resolve(args.gpu)]
+    uuids = [u for u in uuids if cfg.gpu_control_enabled(u)] if args.gpu in (None, "all") else uuids
+    if not uuids:
+        raise SystemExit("no GPU with control_enabled=true")
+    print(f"optimize run {opt.run_id}: gpus={uuids} goal={args.goal or cfg.get('optimize.default_goal')} "
+          f"window={opt.per_gpu_s / 60:.0f}min cap={opt.rig_cap_s / 60:.0f}min hold={opt.hold_s / 60:.0f}min dry_run={cfg.dry_run}")
+    reports = opt.run(uuids, args.goal)
+    print(format_report(reports))
+    if args.json:
+        print(json.dumps([r.as_dict() for r in reports], default=str))
+    return 0 if all(r.outcome in ("applied", "restored") for r in reports) else 2
+
+
+# --- M5: scheduled Claude tasks -------------------------------------------------------------------
+def cmd_tune(args):
+    cfg, st = _live(args)
+    from .tuner import Tuner
+    t = Tuner(cfg, st["db"], st["actions"])
+    coin = st["miner"].active_coin()["coin"]
+    print(json.dumps(t.precheck(coin), indent=1 if args.pretty else None, default=str))
+
+
+def cmd_coins(args):
+    cfg, st = _live(args)
+    from .selector import Selector
+    sel = Selector(cfg, st["db"])
+    if args.sub == "probe":
+        print(json.dumps(sel.fetch_raw(), indent=1)[:8000])
+        return
+    if args.sub == "fork":
+        print(json.dumps(sel.set_fork(activation_height=args.height, activated=True if args.activated else None, note=args.note or ""),
+                         default=str))
+        return
+    models = sorted({g["model"] for g in st["db"].gpus_for_host(st["collector"].host_id)}) or ["RTX 3080"]
+    coin = st["miner"].active_coin()["coin"]
+    d = sel.decide(models, coin, run_id=args.run_id)
+    if args.sub == "table":
+        print(f"current={d['current']} decision={d['decision']} source={d['meta']['provider']} verified={d['meta']['verified']} "
+              f"err={d['meta']['error']}")
+        for r in d["reasoning"]:
+            print("  " + r)
+        print(f"  {'model':12} {'coin':5} {'gross$/d':>9} {'net$/d':>8} {'age':>8} {'src':8} minable")
+        for e in d["estimates"]:
+            age = "-" if e["data_age_s"] is None else f"{e['data_age_s'] / 3600:.1f}h"
+            g = "-" if e["gross_usd_day"] is None else f"{e['gross_usd_day']:.2f}"
+            n = "-" if e["net_usd_day"] is None else f"{e['net_usd_day']:.2f}"
+            print(f"  {e['model'][:12]:12} {e['coin']:5} {g:>9} {n:>8} {age:>8} {e['source']:8} {e['minable']} {e['note']}")
+    else:
+        print(json.dumps(d, default=str))
+
+
+def cmd_claude_run(args):
+    cfg, st = _live(args)
+    from .claude_runner import ClaudeRunner
+    from .context import build_context
+    ctx = build_context(cfg, st, args.task, incident_id=args.incident)
+    runner = ClaudeRunner(cfg, st["db"])
+    if args.dry:
+        d = runner.run_task(args.task, args.trigger, ctx, schedule=args.schedule, dry=True)
+        print("$ " + " ".join(f"'{a}'" if " " in a else a for a in d["args"]))
+        print(d["prompt"])
+        return
+    gating = bool(cfg.get("claude.hourly_gating", True))
+    if args.task == "hourly" and gating and not ctx.get("candidates"):
+        run_id = f"hourly-{time.strftime('%Y%m%d-%H%M')}-gated"
+        st["db"].execute("INSERT INTO claude_runs(run_id, task, trigger, schedule, started, ended, status, summary, output) "
+                         "VALUES(?,?,?,?,?,?,'skipped',?,?)",
+                         (run_id, "hourly", args.trigger, args.schedule, time.time(), time.time(),
+                          "no tuning candidates; LLM call skipped (hourly_gating)", json.dumps(ctx, default=str)))
+        print(json.dumps({"run_id": run_id, "status": "skipped", "summary": "no candidates; gated"}))
+        return
+    res = runner.run_task(args.task, args.trigger, ctx, schedule=args.schedule)
+    if args.task == "incident" and args.incident:
+        st["db"].update_incident(args.incident, claude_run_id=res.get("run_id"))
+        st["notifier"].push(f"{cfg.host_name}: Claude on incident #{args.incident} ({res.get('status')})",
+                            (res.get("summary") or "")[:400], priority="high", tags="robot")
+    print(json.dumps(res, default=str))
+    return 0 if res.get("status") in ("ok", "skipped") else 2
+
+
+def cmd_schedule(args):
+    cfg = _ctx(args)
+    from .scheduler import install, plan
+    if args.sub == "show":
+        for p in plan(cfg):
+            print(json.dumps(p))
+    else:
+        for line in install(cfg, apply=(args.sub == "install")):
+            print(line)
+
+
 def cmd_incidents(args):
     cfg = _ctx(args)
     db = Db(cfg.db_path)
@@ -363,6 +469,35 @@ def build_parser() -> argparse.ArgumentParser:
     tr.add_argument("--run-id")
     tr.set_defaults(fn=cmd_trial)
     sub.add_parser("web", help="run the hub API + dashboard server (hub role only)").set_defaults(fn=cmd_web)
+    op = sub.add_parser("optimize", help="time-boxed per-GPU optimization (A efficiency, B max-hashrate, C balanced)")
+    op.add_argument("--gpu", default="all", help="GPU uuid or index, or all (control-enabled GPUs only)")
+    op.add_argument("--goal", choices=["max-hashrate", "max-efficiency", "target-temp"])
+    op.add_argument("--window-min", type=float, help="hard window per GPU (default optimize.per_gpu_s)")
+    op.add_argument("--cap-min", type=float, help="rig-wide cap (default optimize.rig_cap_s)")
+    op.add_argument("--hold-min", type=float, help="hold per step (default optimize.hold_s)")
+    op.add_argument("--steps", type=int, help="max steps per strategy (default optimize.steps)")
+    op.add_argument("--json", action="store_true", help="also print the JSON report")
+    op.set_defaults(fn=cmd_optimize)
+    tu = sub.add_parser("tune", help="hourly deterministic pre-check: candidates, triggers, proposal (JSON)")
+    tu.add_argument("--pretty", action="store_true")
+    tu.set_defaults(fn=cmd_tune)
+    co = sub.add_parser("coins", help="profitability table / decision; `coins probe` raw source JSON; `coins fork` record fork status")
+    co.add_argument("sub", nargs="?", default="table", choices=["table", "json", "probe", "fork"])
+    co.add_argument("--height", type=int, help="fork: announced activation height")
+    co.add_argument("--activated", action="store_true", help="fork: Pearl no longer minable on this rig")
+    co.add_argument("--note")
+    co.add_argument("--run-id")
+    co.set_defaults(fn=cmd_coins)
+    cr = sub.add_parser("claude-run", help="run a scheduled Claude task headlessly (hub)")
+    cr.add_argument("task", choices=["hourly", "algo_check", "incident"])
+    cr.add_argument("--trigger", default="manual", choices=["schedule", "manual", "watchdog"])
+    cr.add_argument("--schedule", help="cron string for the dashboard row")
+    cr.add_argument("--incident", type=int, help="incident id (incident task)")
+    cr.add_argument("--dry", action="store_true", help="print the command and prompt; do not call Claude")
+    cr.set_defaults(fn=cmd_claude_run)
+    sc = sub.add_parser("schedule", help="register the hourly/algo-check runs with the OS scheduler")
+    sc.add_argument("sub", nargs="?", default="show", choices=["show", "plan", "install"])
+    sc.set_defaults(fn=cmd_schedule)
     inc = sub.add_parser("incidents", help="recent incidents")
     inc.add_argument("--limit", type=int, default=20)
     inc.set_defaults(fn=cmd_incidents)
