@@ -1,0 +1,17 @@
+{
+  "_note": "ASSUMED shape for PeakMiner GET /summary. Replace with real output from `rigctl miner dump` on the rig, then tighten parse_summary().",
+  "version": "peakminer x.y.z",
+  "algo": "pearl",
+  "coin": "PRL",
+  "pool": "prl.kryptex.network:7048",
+  "worker": "rig1",
+  "uptime": 86400,
+  "gpus": [
+    {"index": 0, "name": "NVIDIA GeForce RTX 3080", "bus_id": "00000000:01:00.0", "hashrate": 101200000,
+     "accepted": 1532, "rejected": 3, "invalid": 0, "temperature": 68, "memory_temperature": 94,
+     "power": 238, "fan": 72, "core_clock": 1410, "memory_clock": 9751, "status": "mining"},
+    {"index": 1, "name": "NVIDIA GeForce RTX 3080", "bus_id": "00000000:02:00.0", "hashrate": 99800000,
+     "accepted": 1490, "rejected": 2, "invalid": 1, "temperature": 70, "memory_temperature": 96,
+     "power": 241, "fan": 75, "core_clock": 1395, "memory_clock": 9751, "status": "mining"}
+  ]
+}

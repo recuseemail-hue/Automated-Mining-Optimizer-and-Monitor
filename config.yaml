@@ -1,0 +1,120 @@
+# rig-overseer default configuration.
+# Committed defaults. Per-host overrides go in config.local.yaml (gitignored) next to this
+# file; it is deep-merged over these values. Secrets never go in either file: use
+# environment variables or the secrets file (see secrets.file). Strings may reference
+# environment variables as ${VAR}.
+
+host:
+  name: null            # null -> OS hostname
+  role: hub             # hub | worker. Exactly one hub per fleet. Workers forward to hub.url.
+  data_dir: null        # null -> %ProgramData%\rig-overseer (Windows) or /var/lib/rig-overseer (Linux)
+
+hub:
+  url: http://127.0.0.1:8080     # workers forward telemetry here; ignored on the hub itself
+  forward_batch: 200
+  forward_interval_s: 60
+
+secrets:
+  file: null            # null -> <data_dir>/secrets.env ; KEY=VALUE lines, file mode 600 / owner-only ACL
+
+db:
+  path: null            # null -> <data_dir>/overseer.db
+  retain_15s_hours: 48  # fast-resolution rows (watchdog) kept for incident bundles only
+  retain_5m_days: 400
+
+collector:
+  interval_s: 300
+  fast_interval_s: 15
+
+gpu:
+  backend: auto         # auto | nvml | sim
+  sim:
+    count: 2
+    state_file: null    # null -> <data_dir>/sim_gpus.json (tests and fault injection poke this)
+  # Memory-junction temperature sources, tried in order. NVML does not expose it on GeForce.
+  memj_sources:
+    - miner             # PeakMiner API, if it reports it
+    - lhm               # LibreHardwareMonitor web server (Windows), see sensors.lhm_url
+    - nvml_field        # NVML_FI_DEV_MEMORY_TEMP; works on HBM parts, usually unsupported on GeForce
+
+sensors:
+  lhm_url: http://127.0.0.1:8085/data.json   # LibreHardwareMonitor "Remote web server"; optional
+  wall_power:
+    provider: none      # none | shelly | kasa | tasmota
+    url: null
+
+miner:
+  backend: peakminer    # peakminer | sim
+  exe: C:\miners\peakminer\peakminer.exe
+  api_url: http://127.0.0.1:4068/summary
+  api_timeout_s: 3
+  coin: PRL
+  algo: pearl
+  pool: prl.kryptex.network:7048
+  worker: ${RIG_WORKER_NAME}
+  dev_fee_pct: 3.0
+  extra_args: []
+  # hashrate unit the miner API reports in; collector normalises to H/s
+  api_hashrate_unit: kH/s
+
+pool:
+  provider: kryptex
+  fee_pct: 1.0
+  # UNVERIFIED endpoints (docs unreachable from the build sandbox). Verify with `rigctl pool probe`
+  # on the rig and adjust url/fields. ${WALLET} is replaced with secret RIG_WALLET_<COIN>.
+  stats_url: https://pool.kryptex.com/api/v1/miner/prl/${WALLET}
+  fields:                      # dotted paths into the JSON response; null = not provided
+    hashrate: hashrate
+    workers: workers_online
+    balance: balance
+    balance_usd: balance_usd
+  cache_ttl_s: 600
+  verified: false              # set true once probe matches; until then values are logged as unverified
+
+economics:
+  kwh_usd: 0.0
+  switch_downtime_min: 5
+
+# Target operating envelope. Per-GPU overrides under gpus[].targets.
+targets:
+  core_c_max: 75
+  memj_c_max: 100
+  power_limit_pct_default: 70
+
+# Hard clamps for the action API (M2). Matched by substring of the GPU model name; first match wins.
+clamps:
+  default:
+    power_limit_pct: [55, 100]
+    power_limit_step_pct: 5
+    core_lock_mhz: [1200, 1950]
+    core_offset_mhz: [-300, 150]
+    core_step_mhz: 30
+    mem_offset_mhz: [-500, 1200]
+    mem_step_mhz: 100
+    fan_pct: [40, 100]
+    fan_step_pct: 10
+  models:
+    "RTX 3080":
+      power_limit_pct: [55, 100]
+      core_lock_mhz: [1200, 1950]
+      mem_offset_mhz: [-500, 1200]
+
+limits:
+  miner_restarts_per_30min: 3
+  coin_switches_per_day: 1
+  reboots_per_day: 2
+  psu_budget_w: 800              # continuous budget for this host (1000 W PSU at 80%)
+  circuit_budget_w: 1440         # 15 A @ 120 V continuous
+
+safety:
+  dry_run: true                  # global. Control actions are logged but not applied.
+
+gpus: []                         # per-GPU: {uuid, name, control_enabled, targets: {...}}
+#  - uuid: GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+#    name: "3080 FTW3 #1"
+#    control_enabled: false
+
+logging:
+  level: INFO
+  max_mb: 20
+  backups: 5

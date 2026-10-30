@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: rig-overseer
+Version: 0.1.0
+Summary: Unattended GPU mining rig overseer with Claude as the decision layer
+Requires-Python: >=3.11
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: psutil>=5.9
+Requires-Dist: nvidia-ml-py>=12.535
+Provides-Extra: web
+Requires-Dist: fastapi>=0.110; extra == "web"
+Requires-Dist: uvicorn>=0.29; extra == "web"
+Requires-Dist: jinja2>=3.1; extra == "web"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
