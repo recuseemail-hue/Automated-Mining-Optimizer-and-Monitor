@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Claude tasks — rig-overseer{% endblock %}
+{% block content %}
+<section class="card"><h2>Scheduled runs &amp; incidents handled by Claude</h2>
+<p class="muted">Local headless runs started by the OS scheduler on the hub. Each row: schedule, status, summary; expand for full output, actions and before/after settings.</p>
+<div id="runs" class="list"><p class="muted">loading…</p></div></section>
+{% endblock %}
+{% block scripts %}<script>RO.claude();</script>{% endblock %}

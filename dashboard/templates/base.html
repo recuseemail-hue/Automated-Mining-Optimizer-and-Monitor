@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}rig-overseer{% endblock %}</title>
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<link rel="stylesheet" href="/static/app.css">
+<script>try{var t=localStorage.getItem('theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body data-nav="{{ nav|default('') }}">
+<header class="top">
+  <a class="brand" href="/">rig-overseer</a>
+  <nav class="tabs" aria-label="Pages">
+    <a href="/" class="{{ 'on' if nav=='overview' }}">Overview</a>
+    <a href="/gpus" class="{{ 'on' if nav=='gpus' }}">GPUs</a>
+    <a href="/log" class="{{ 'on' if nav=='log' }}">Log</a>
+    <a href="/claude" class="{{ 'on' if nav=='claude' }}">Claude</a>
+    <a href="/incidents" class="{{ 'on' if nav=='incidents' }}">Incidents</a>
+  </nav>
+  <div class="right">
+    <span id="clock" class="muted"></span>
+    <button id="theme" class="icon" title="Theme" aria-label="Toggle theme">◐</button>
+    <a class="icon" href="/logout" title="Log out" aria-label="Log out">⎋</a>
+  </div>
+</header>
+<main id="main">
+{% block content %}{% endblock %}
+</main>
+<nav class="bottom" aria-label="Pages">
+  <a href="/" class="{{ 'on' if nav=='overview' }}"><span>▣</span>Home</a>
+  <a href="/gpus" class="{{ 'on' if nav=='gpus' }}"><span>▤</span>GPUs</a>
+  <a href="/log" class="{{ 'on' if nav=='log' }}"><span>≣</span>Log</a>
+  <a href="/claude" class="{{ 'on' if nav=='claude' }}"><span>✦</span>Claude</a>
+  <a href="/incidents" class="{{ 'on' if nav=='incidents' }}"><span>⚠</span>Alerts</a>
+</nav>
+<script src="/static/vendor/uPlot.iife.min.js"></script>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

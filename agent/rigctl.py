@@ -279,6 +279,12 @@ def cmd_trial(args):
         print(json.dumps(tr.tick(), default=str))
 
 
+def cmd_web(args):
+    cfg = _ctx(args)
+    from api.app import serve
+    serve(cfg)
+
+
 def cmd_incidents(args):
     cfg = _ctx(args)
     db = Db(cfg.db_path)
@@ -356,6 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
     tr.add_argument("--reason", default="")
     tr.add_argument("--run-id")
     tr.set_defaults(fn=cmd_trial)
+    sub.add_parser("web", help="run the hub API + dashboard server (hub role only)").set_defaults(fn=cmd_web)
     inc = sub.add_parser("incidents", help="recent incidents")
     inc.add_argument("--limit", type=int, default=20)
     inc.set_defaults(fn=cmd_incidents)

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}GPU {{ gpu.idx }} {{ gpu.model }} — rig-overseer{% endblock %}
+{% block content %}
+<section class="card head">
+  <div><a href="/gpus" class="muted">‹ GPUs</a>
+    <h1>{{ gpu.host }} · GPU {{ gpu.idx }}</h1>
+    <div class="muted">{{ gpu.model }} · <code>{{ gpu.uuid }}</code> · control {{ 'on' if gpu.control_enabled else 'off' }}</div></div>
+  <div class="badges" id="gpu-badges"></div>
+</section>
+<section class="tiles" id="tiles"></section>
+<section class="filters" id="range" role="toolbar" aria-label="Time range">
+  <button data-h="1" class="chip">1h</button><button data-h="6" class="chip">6h</button>
+  <button data-h="24" class="chip on">24h</button><button data-h="168" class="chip">7d</button>
+  <button data-h="720" class="chip">30d</button>
+  <span class="spacer"></span><label class="chip"><input type="checkbox" id="tables"> tables</label>
+</section>
+<section class="charts" id="charts"></section>
+<section class="card"><h2>Profile &amp; trials</h2><div id="profile"></div><div id="trials" class="list"></div></section>
+<section class="card"><h2>Recent actions</h2><div id="actions" class="list"></div></section>
+{% endblock %}
+{% block scripts %}<script>RO.gpu({{ gpu.id }});</script>{% endblock %}

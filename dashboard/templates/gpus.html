@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}GPUs — rig-overseer{% endblock %}
+{% block content %}
+<section class="card"><h2>All GPUs</h2><div class="gpu-grid" id="gpu-cards"><p class="muted">loading…</p></div></section>
+{% endblock %}
+{% block scripts %}<script>RO.gpus();</script>{% endblock %}

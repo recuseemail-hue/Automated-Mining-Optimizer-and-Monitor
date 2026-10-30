@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>rig-overseer — sign in</title>
+<link rel="stylesheet" href="/static/app.css"></head>
+<body class="login">
+<form method="post" action="/login" class="card loginbox">
+  <h1>rig-overseer</h1>
+  <p class="muted">{{ cfg_host }}</p>
+  {% if not configured %}
+    <p class="err">No dashboard password set. Add <code>DASHBOARD_PASSWORD=…</code> to the secrets file on the hub and restart the web service.</p>
+  {% else %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Password <input name="password" type="password" autocomplete="current-password" autofocus required></label>
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+    <button type="submit" class="primary">Sign in</button>
+  {% endif %}
+</form>
+</body></html>

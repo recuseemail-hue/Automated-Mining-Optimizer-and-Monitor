@@ -101,6 +101,10 @@ class Actions:
         rid = self.db.log_action(action, actor, ok, dry, host_id=self.host_id, gpu_id=gid, params=params,
                                  before=before, after=after, reason=reason, run_id=run_id, error=error, ts=self.clock())
         res = ActionResult(action, ok, dry, params, before, after, error, rid)
+        if self.cfg.role == "worker":
+            self.db.outbox_push("action", {"ts": self.clock(), "gpu_uuid": uuid, "action": action, "params": params,
+                                           "before": before, "after": after, "reason": reason, "actor": actor,
+                                           "run_id": run_id, "dry_run": dry, "ok": ok, "error": error})
         log.log(logging.INFO if ok else logging.WARNING, "action %s %s by %s dry=%s ok=%s %s -> %s %s",
                 action, uuid or "", actor, dry, ok, before, after, error or "")
         return res

@@ -50,11 +50,14 @@ def test_worker_role_queues_outbox(stack):
     cfg, db, gpu, miner, col = stack
     cfg.data["host"]["role"] = "worker"
     col.collect_once()
-    kinds = sorted(r["kind"] for r in db.outbox_peek(10))
-    assert kinds == ["gpu_sample", "gpu_sample", "host_sample"]
-    db.outbox_fail([1], "boom")
+    kinds = sorted(r["kind"] for r in db.outbox_peek(20))
+    assert kinds == ["gpu_info", "gpu_info", "gpu_sample", "gpu_sample", "host_info", "host_sample"]
+    col.collect_once()                               # registry rows are sent once, samples every time
+    assert sorted(r["kind"] for r in db.outbox_peek(20)).count("gpu_info") == 2
+    ids = [r["id"] for r in db.outbox_peek(20)]
+    db.outbox_fail(ids[:1], "boom")
     assert db.outbox_peek(1)[0]["attempts"] == 1
-    db.outbox_ack([1, 2, 3])
+    db.outbox_ack(ids)
     assert db.outbox_peek(10) == []
 
 

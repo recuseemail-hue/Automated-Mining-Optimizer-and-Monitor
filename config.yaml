@@ -13,6 +13,11 @@ hub:
   url: http://127.0.0.1:8080     # workers forward telemetry here; ignored on the hub itself
   forward_batch: 200
   forward_interval_s: 60
+  bind: 127.0.0.1                # hub only: set to the Tailscale IP (100.x.y.z). Never 0.0.0.0 on a public NIC.
+  port: 8080
+  secure_cookies: false          # true when served via `tailscale serve` (HTTPS)
+  session_days: 30
+  login_lockout_s: 60            # after 5 failed logins per client
 
 secrets:
   file: null            # null -> <data_dir>/secrets.env ; KEY=VALUE lines, file mode 600 / owner-only ACL

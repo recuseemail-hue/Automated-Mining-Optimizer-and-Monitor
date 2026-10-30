@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Incidents — rig-overseer{% endblock %}
+{% block content %}
+<section class="card"><h2>Incidents</h2><div id="inc" class="list"><p class="muted">loading…</p></div></section>
+{% endblock %}
+{% block scripts %}<script>RO.incidents();</script>{% endblock %}

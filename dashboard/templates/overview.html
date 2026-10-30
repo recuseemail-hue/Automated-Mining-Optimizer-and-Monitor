@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Overview — rig-overseer{% endblock %}
+{% block content %}
+<section class="hero card">
+  <div class="label">Total hashrate</div>
+  <div class="value" id="hero-hr">—</div>
+  <div class="sub muted" id="hero-sub">loading…</div>
+</section>
+<section class="tiles" id="tiles"></section>
+<section class="card" id="alerts"><h2>Active alerts</h2><div class="list" id="alert-list"><p class="muted">loading…</p></div></section>
+<section class="card"><h2>GPUs</h2><div class="gpu-grid" id="gpu-cards"></div></section>
+<section class="card"><h2>Hosts</h2><div class="list" id="host-list"></div></section>
+{% endblock %}
+{% block scripts %}<script>RO.overview();</script>{% endblock %}

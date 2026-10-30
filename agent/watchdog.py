@@ -71,6 +71,9 @@ class Watchdog:
             return existing["id"]
         iid = self.db.open_incident(rule, severity, host_id=self.host_id, gpu_id=gid, ladder_step=ladder, summary=summary,
                                     opened=self.clock())
+        if self.cfg.role == "worker":
+            self.db.outbox_push("incident", {"local_id": iid, "opened": self.clock(), "gpu_uuid": uuid, "rule": rule,
+                                             "severity": severity, "ladder_step": ladder, "status": "open", "summary": summary})
         self.notifier.push(f"{self.cfg.host_name}: {rule}", f"{summary}\naction: {ladder}",
                            priority="urgent" if severity == "critical" else "high", tags="rotating_light",
                            key=f"incident.{rule}.{uuid}")
@@ -247,7 +250,11 @@ class Watchdog:
 
         self.last_tick = {"ts": now, "gpus": len(present), "missing": sorted(missing), "total_w": total_w,
                           "miner": mstats.state, "ladder": {u: LADDER[st.ladder] for u, st in self.gpus.items() if st.ladder},
+                          "rules": {u: sorted(st.since) for u, st in self.gpus.items() if st.since},
                           "judged": judged}
+        self.db.kv_set("watchdog.state", self.last_tick)
+        if self.cfg.role == "worker" and (self.last_tick["ladder"] or int(now) % 60 < float(self.w.get("interval_s", 15))):
+            self.db.outbox_push("state", {"key": "watchdog.state", "value": self.last_tick})
         return self.last_tick
 
     def _write_fast_rows(self, rows, ts: float) -> None:

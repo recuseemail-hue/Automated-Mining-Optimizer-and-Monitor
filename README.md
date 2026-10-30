@@ -5,7 +5,7 @@ bounded per-GPU tuning, coin selection with hysteresis, a phone-friendly dashboa
 the decision layer for scheduled reviews and incidents. Hub/worker: one rig hosts the dashboard and
 DB; every other rig (and later the laptops) runs the agent only and forwards to the hub.
 
-Status: **M1 telemetry + DB** and **M2 watchdog + action API** done. M3–M7 pending. Observe-only by default.
+Status: **M1 telemetry + DB**, **M2 watchdog + action API**, **M3 dashboard + API** done. M4–M7 pending. Observe-only by default.
 
 ## Install (per host)
 ```bash
@@ -33,7 +33,18 @@ rigctl agent             # the agent service: watchdog 15 s + collector 5 min (+
 rigctl act pl 230 --gpu 0 --reason "..."     # clamped, logged control action (dry-run until enabled)
 rigctl trial start --gpu 0 --key mem_offset_mhz --value 100 --hold 900   # self-reverting trial
 rigctl profile show --gpu 0 | rigctl incidents | rigctl actions
+rigctl web               # hub only: API + dashboard on hub.bind:hub.port (becomes a service in M7)
 ```
+
+## Dashboard (hub)
+- Secrets on the hub: `DASHBOARD_PASSWORD` (UI login), `RIG_HUB_TOKEN` (workers' ingest + API bearer).
+- `hub.bind` must be the hub's Tailscale IP (`tailscale ip -4`). Expose HTTPS with
+  `tailscale serve --bg https+insecure://127.0.0.1:8080` or bind directly to the tailnet IP; never port-forward.
+- Workers: `host.role: worker`, `hub.url: http://<hub-tailscale-ip>:8080`, same `RIG_HUB_TOKEN`.
+- Pages: Overview (balance, coin, hashrate, power, uptime, alerts), GPUs + per-GPU charts (1h–30d, table view),
+  Log (filters + CSV), Claude (run history with full output and actions), Incidents.
+- No external assets: uPlot 1.6.30 is vendored (`dashboard/static/vendor`, MIT, sha256
+  `7f29cd14…b4c4f`), so the dashboard works during an internet outage.
 
 ## Enabling control (per GPU)
 1. `safety.dry_run: false` in `config.local.yaml`.

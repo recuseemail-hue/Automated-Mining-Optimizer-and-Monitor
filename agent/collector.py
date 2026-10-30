@@ -37,8 +37,20 @@ class Collector:
     def register_gpus(self) -> list[GpuInfo]:
         infos = self.gpu.enumerate()
         for i in infos:
+            ctl = self.cfg.gpu_control_enabled(i.uuid)
             self.db.upsert_gpu(self.host_id, i.uuid, i.index, i.name, i.bus_id, i.stock_pl_w, i.min_pl_w,
-                               i.max_pl_w, i.vram_mb, self.cfg.gpu_control_enabled(i.uuid))
+                               i.max_pl_w, i.vram_mb, ctl)
+            if self.cfg.role == "worker":
+                sig = json.dumps([i.index, i.name, i.bus_id, i.stock_pl_w, i.min_pl_w, i.max_pl_w, i.vram_mb, ctl])
+                if self.db.kv_get(f"fwd.gpu_info.{i.uuid}") != sig:
+                    self.db.outbox_push("gpu_info", {"uuid": i.uuid, "idx": i.index, "model": i.name, "bus_id": i.bus_id,
+                                                     "stock_pl_w": i.stock_pl_w, "min_pl_w": i.min_pl_w,
+                                                     "max_pl_w": i.max_pl_w, "vram_mb": i.vram_mb, "control_enabled": ctl})
+                    self.db.kv_set(f"fwd.gpu_info.{i.uuid}", sig)
+        if self.cfg.role == "worker" and not self.db.kv_get("fwd.host_info"):
+            self.db.outbox_push("host_info", {"name": self.cfg.host_name, "os": self.plat.os_string(), "role": "worker",
+                                              "meta": {"gpu_backend": self.gpu.name, "miner": self.miner.name}})
+            self.db.kv_set("fwd.host_info", True)
         return infos
 
     # --- sampling ----------------------------------------------------------------------------
