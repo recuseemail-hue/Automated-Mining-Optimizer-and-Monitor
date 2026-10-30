@@ -108,6 +108,50 @@ limits:
 
 safety:
   dry_run: true                  # global. Control actions are logged but not applied.
+  # Hard-limit protection (ladder + shutdown) also obeys dry_run unless this is true. Recommended true
+  # once the rig is confirmed stable: the miner's own temperature pause remains the first line anyway.
+  emergency_override_dry_run: false
+  allow_shutdown: true           # watchdog may shut the PC down on a hard-limit breach
+  shutdown_notice_s: 45          # push notification lead time before shutdown
+
+watchdog:
+  interval_s: 15
+  # catastrophic conditions (sustained for `sustain_s` before acting)
+  core_c_crit: 85
+  memj_c_crit: 105
+  sustain_s: 30
+  core_c_hard: 95                # immediate stop + shutdown
+  memj_c_hard: 110
+  fan_fail_util_pct: 50          # 0 RPM / 0 % fan while util above this counts as fan failure
+  fan_fail_sustain_s: 60
+  zero_hashrate_s: 600           # miner running but 0 H/s, or miner down, for this long -> restart
+  crash_loop_window_s: 900       # dying again within this after a rule restart = crash loop
+  crash_loop_retry_s: 60         # fast retry in a crash loop; limits.miner_restarts_per_30min then stops it
+  overpower_sustain_s: 30
+  escalate_after_s: 60           # time at a ladder step before moving to the next
+  recover_after_s: 600           # condition clear for this long before auto-recovery
+  max_auto_recoveries_per_day: 3
+  ladder_pl_floor_pct: 55        # ladder step 1 drops the power limit to this % of stock
+
+notify:
+  provider: ntfy                 # ntfy | none
+  ntfy:
+    url: https://ntfy.sh         # topic from secret NTFY_TOPIC, optional bearer NTFY_TOKEN
+  cooldown_s: 600                # identical alert keys are suppressed within this window
+
+tuning:
+  hourly:
+    trial_hold_s: 900            # 15 min trial window
+    max_gpus_per_run: 1
+    min_improve_pct: 1.0
+    converge_after: 3            # consecutive non-improving trials -> converged
+    converged_days: 7
+    max_trials_per_gpu_per_day: 6
+    trigger_temp_over_c: 0       # core temp above target by this much triggers tuning
+    trigger_hashrate_drop_pct: 5
+    trigger_eff_drop_pct: 5
+  baseline_window_s: 900
+  settle_s: 90                   # samples in the first settle_s after a change are ignored
 
 gpus: []                         # per-GPU: {uuid, name, control_enabled, targets: {...}}
 #  - uuid: GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

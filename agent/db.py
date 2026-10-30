@@ -220,12 +220,13 @@ class Db:
     # --- actions / kv / outbox ------------------------------------------------
     def log_action(self, action: str, actor: str, ok: bool, dry_run: bool, *, host_id: int | None = None,
                    gpu_id: int | None = None, params: Any = None, before: Any = None, after: Any = None,
-                   reason: str | None = None, run_id: str | None = None, error: str | None = None) -> int:
+                   reason: str | None = None, run_id: str | None = None, error: str | None = None,
+                   ts: float | None = None) -> int:
         with self._lock:
             cur = self.conn.execute(
                 "INSERT INTO actions(ts, host_id, gpu_id, action, params, before, after, reason, actor, run_id, "
                 "dry_run, ok, error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (time.time(), host_id, gpu_id, action, _j(params), _j(before), _j(after), reason, actor, run_id,
+                (ts or time.time(), host_id, gpu_id, action, _j(params), _j(before), _j(after), reason, actor, run_id,
                  int(dry_run), int(ok), error),
             )
             return cur.lastrowid
@@ -243,8 +244,108 @@ class Db:
     def outbox_push(self, kind: str, payload: dict) -> None:
         self.execute("INSERT INTO outbox(created, kind, payload) VALUES(?,?,?)", (time.time(), kind, _j(payload)))
 
-    def outbox_peek(self, limit: int) -> list[sqlite3.Row]:
-        return self.query("SELECT * FROM outbox ORDER BY id LIMIT ?", (limit,))
+    def outbox_peek(self, limit: int, kinds: tuple[str, ...] | None = None, exclude: tuple[str, ...] = ()) -> list[sqlite3.Row]:
+        sql, params = "SELECT * FROM outbox", []
+        conds = []
+        if kinds:
+            conds.append(f"kind IN ({','.join('?' * len(kinds))})")
+            params += list(kinds)
+        if exclude:
+            conds.append(f"kind NOT IN ({','.join('?' * len(exclude))})")
+            params += list(exclude)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        return self.query(sql + " ORDER BY id LIMIT ?", (*params, limit))
+
+    # --- profiles -------------------------------------------------------------
+    def save_profile(self, gpu_id: int, settings: dict, status: str, *, coin: str | None = None, goal: str | None = None,
+                     score: Any = None, created_by: str = "system", note: str | None = None,
+                     converged_until: float | None = None) -> int:
+        with self._lock:
+            if status in ("active", "known_good"):
+                # one current profile per status per GPU; older ones are retired
+                self.conn.execute("UPDATE profiles SET status='retired' WHERE gpu_id=? AND status=?", (gpu_id, status))
+            cur = self.conn.execute(
+                "INSERT INTO profiles(gpu_id, coin, goal, settings, score, status, converged_until, created_by, created, note) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (gpu_id, coin, goal, _j(settings), _j(score), status, converged_until, created_by, time.time(), note))
+            return cur.lastrowid
+
+    def profile(self, gpu_id: int, status: str) -> dict | None:
+        row = self.one("SELECT * FROM profiles WHERE gpu_id=? AND status=? ORDER BY created DESC LIMIT 1", (gpu_id, status))
+        if not row:
+            return None
+        d = dict(row)
+        d["settings"] = json.loads(d["settings"])
+        d["score"] = json.loads(d["score"]) if d["score"] else None
+        return d
+
+    def set_profile_status(self, profile_id: int, status: str, converged_until: float | None = None) -> None:
+        self.execute("UPDATE profiles SET status=?, converged_until=COALESCE(?, converged_until) WHERE id=?",
+                     (status, converged_until, profile_id))
+
+    # --- trials ---------------------------------------------------------------
+    def insert_trial(self, gpu_id: int, kind: str, setting: dict, baseline: dict, started: float, deadline: float,
+                     *, run_id: str | None = None, strategy: str | None = None, step: int | None = None) -> int:
+        with self._lock:
+            cur = self.conn.execute(
+                "INSERT INTO trials(gpu_id, run_id, kind, strategy, step, setting, baseline, started, deadline, verdict) "
+                "VALUES(?,?,?,?,?,?,?,?,?,'open')",
+                (gpu_id, run_id, kind, strategy, step, _j(setting), _j(baseline), started, deadline))
+            return cur.lastrowid
+
+    def open_trials(self, gpu_id: int | None = None) -> list[dict]:
+        rows = self.query("SELECT * FROM trials WHERE verdict='open'" + (" AND gpu_id=?" if gpu_id else "") + " ORDER BY id",
+                          (gpu_id,) if gpu_id else ())
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["setting"], d["baseline"] = json.loads(d["setting"]), json.loads(d["baseline"] or "{}")
+            out.append(d)
+        return out
+
+    def close_trial(self, trial_id: int, verdict: str, result: Any = None, reason: str | None = None,
+                    ended: float | None = None) -> None:
+        self.execute("UPDATE trials SET verdict=?, result=?, reason=?, ended=? WHERE id=?",
+                     (verdict, _j(result), reason, ended or time.time(), trial_id))
+
+    def trials_since(self, gpu_id: int, since_ts: float, kind: str | None = None) -> list[sqlite3.Row]:
+        return self.query("SELECT * FROM trials WHERE gpu_id=? AND started>=?" + (" AND kind=?" if kind else "") + " ORDER BY id",
+                          (gpu_id, since_ts, *((kind,) if kind else ())))
+
+    # --- incidents ------------------------------------------------------------
+    def open_incident(self, rule: str, severity: str, *, host_id: int | None = None, gpu_id: int | None = None,
+                      ladder_step: str | None = None, summary: str | None = None, opened: float | None = None) -> int:
+        with self._lock:
+            cur = self.conn.execute(
+                "INSERT INTO incidents(opened, host_id, gpu_id, rule, severity, ladder_step, status, summary) "
+                "VALUES(?,?,?,?,?,?, 'open', ?)",
+                (opened or time.time(), host_id, gpu_id, rule, severity, ladder_step, summary))
+            return cur.lastrowid
+
+    def incident_open_for(self, rule: str, gpu_id: int | None) -> sqlite3.Row | None:
+        return self.one("SELECT * FROM incidents WHERE rule=? AND status='open' AND gpu_id IS ? ORDER BY id DESC LIMIT 1",
+                        (rule, gpu_id))
+
+    def update_incident(self, incident_id: int, **cols: Any) -> None:
+        if not cols:
+            return
+        sets = ", ".join(f"{k}=?" for k in cols)
+        self.execute(f"UPDATE incidents SET {sets} WHERE id=?", (*[_j(v) if isinstance(v, (dict, list)) else v for v in cols.values()], incident_id))
+
+    def count_actions_since(self, action: str, since_ts: float, *, host_id: int | None = None, gpu_id: int | None = None,
+                            ok_only: bool = True) -> int:
+        sql = "SELECT COUNT(*) c FROM actions WHERE action=? AND ts>=?"
+        params: list[Any] = [action, since_ts]
+        if ok_only:
+            sql += " AND ok=1"
+        if host_id is not None:
+            sql += " AND host_id=?"
+            params.append(host_id)
+        if gpu_id is not None:
+            sql += " AND gpu_id=?"
+            params.append(gpu_id)
+        return self.one(sql, params)["c"]
 
     def outbox_ack(self, ids: list[int]) -> None:
         if ids:

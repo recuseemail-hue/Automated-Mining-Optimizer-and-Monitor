@@ -83,7 +83,7 @@ class SimBackend(GpuBackend):
         # hashrate (H/s) ~ 100 TH/s at 240 W for a 3080-on-Pearl stand-in; mem offset helps until ~+1000
         mem = g["mem_offset_mhz"]
         core_bonus = (g["core_offset_mhz"] or 0) / 3000.0
-        mem_bonus = min(mem, 1000) / 10000.0
+        mem_bonus = min(mem, 1000) / 5000.0
         base = 100e12 * (eff_pl / 240.0) ** 0.6
         hashrate = base * (1 + core_bonus + mem_bonus)
         rej_rate = 0.0 if mem <= 1000 else min(0.5, (mem - 1000) / 400.0)   # GDDR6X: errors, not crashes

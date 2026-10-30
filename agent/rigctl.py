@@ -190,6 +190,109 @@ def cmd_sim(args):
     print("faults:", be._gpu(args.uuid).get("faults") if not faults.get("missing") else {"missing": True})
 
 
+# --- M2: service, actions, profiles, trials, incidents ----------------------------------------
+def _live(args):
+    cfg = _ctx(args)
+    from . import service
+    return cfg, service.build(cfg)
+
+
+def cmd_agent(args):
+    cfg = _ctx(args)
+    from . import service
+    service.run(cfg)
+
+
+def cmd_act(args):
+    """Allowlisted control actions. This is the only hardware interface exposed to Claude runs."""
+    cfg, st = _live(args)
+    a = st["actions"]
+    actor, reason, rid = args.actor, args.reason, args.run_id
+    k = args.what
+    if k == "pl":
+        r = a.set_power_limit(args.gpu, float(args.value), actor, reason, run_id=rid)
+    elif k == "core-offset":
+        r = a.set_core_offset(args.gpu, int(args.value), actor, reason, run_id=rid)
+    elif k == "mem-offset":
+        r = a.set_mem_offset(args.gpu, int(args.value), actor, reason, run_id=rid)
+    elif k == "core-lock":
+        r = a.set_core_lock(args.gpu, int(args.value), actor, reason, run_id=rid) if args.value not in (None, "reset") \
+            else a.reset_core_lock(args.gpu, actor, reason, run_id=rid)
+    elif k == "fan":
+        r = a.set_fan(args.gpu, None if args.value in (None, "auto") else int(args.value), actor, reason, run_id=rid)
+    elif k == "miner-start":
+        r = a.miner_start(actor, reason, run_id=rid)
+    elif k == "miner-stop":
+        r = a.miner_stop(actor, reason, run_id=rid)
+    elif k == "miner-restart":
+        r = a.miner_restart(actor, reason, run_id=rid)
+    elif k == "pause":
+        r = a.miner_pause_gpu(args.gpu, actor, reason, run_id=rid)
+    elif k == "resume":
+        r = a.miner_resume_gpu(args.gpu, actor, reason, run_id=rid)
+    elif k == "switch-coin":
+        r = a.switch_coin(args.value, actor, reason, run_id=rid)
+    elif k == "reboot":
+        r = a.reboot(actor, reason, run_id=rid)
+    elif k == "shutdown":
+        r = a.shutdown(actor, reason, run_id=rid)
+    else:
+        raise SystemExit(f"unknown action {k}")
+    print(json.dumps(r.as_dict(), default=str))
+    return 0 if r.ok else 2
+
+
+def cmd_profile(args):
+    cfg, st = _live(args)
+    db, a, tr = st["db"], st["actions"], st["trials"]
+    uuid = a.resolve(args.gpu)
+    gid = db.gpu_id(uuid)
+    if args.sub == "show":
+        print(json.dumps({"current": a.settings(uuid), "active": db.profile(gid, "active"),
+                          "known_good": db.profile(gid, "known_good"), "converged": db.profile(gid, "converged")},
+                         indent=1, default=str))
+    elif args.sub == "save-current":
+        pid = db.save_profile(gid, a.settings(uuid), args.status, created_by=args.actor, note=args.reason)
+        print(f"saved profile {pid} as {args.status}")
+    elif args.sub == "restore":
+        prof = db.profile(gid, args.status)
+        if not prof:
+            raise SystemExit(f"no {args.status} profile for {uuid}")
+        res = a.apply_settings(uuid, prof["settings"], args.actor, args.reason or f"restore {args.status}")
+        print(json.dumps([r.as_dict() for r in res], default=str))
+
+
+def cmd_trial(args):
+    cfg, st = _live(args)
+    db, tr = st["db"], st["trials"]
+    if args.sub == "list":
+        for t in db.open_trials():
+            print(json.dumps(t, default=str))
+    elif args.sub == "start":
+        setting = {args.key: (None if args.value == "null" else float(args.value) if "." in args.value else int(args.value))}
+        uuid = st["actions"].resolve(args.gpu)
+        print(json.dumps(tr.start(uuid, setting, float(args.hold), actor=args.actor, reason=args.reason, run_id=args.run_id,
+                                  kind=args.kind), default=str))
+    elif args.sub == "abort":
+        print(f"aborted {tr.abort_all(args.reason or 'operator abort', actor=args.actor)} trial(s)")
+    elif args.sub == "tick":
+        print(json.dumps(tr.tick(), default=str))
+
+
+def cmd_incidents(args):
+    cfg = _ctx(args)
+    db = Db(cfg.db_path)
+    for r in db.query("SELECT * FROM incidents ORDER BY id DESC LIMIT ?", (args.limit,)):
+        print(json.dumps(dict(r), default=str))
+
+
+def cmd_actions(args):
+    cfg = _ctx(args)
+    db = Db(cfg.db_path)
+    for r in db.query("SELECT * FROM actions ORDER BY id DESC LIMIT ?", (args.limit,)):
+        print(json.dumps(dict(r), default=str))
+
+
 def _fmt_hr(h):
     if h is None:
         return "-"
@@ -225,13 +328,48 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--set", action="append", metavar="KEY=JSON", help="e.g. core_c=92 fan_rpm=0 missing=true")
     si.add_argument("--clear", action="store_true")
     si.set_defaults(fn=cmd_sim)
+    sub.add_parser("agent", help="run the agent service (watchdog + collector [+ forwarder]) in the foreground").set_defaults(fn=cmd_agent)
+    ac = sub.add_parser("act", help="allowlisted control action (clamped, logged)")
+    ac.add_argument("what", choices=["pl", "core-offset", "mem-offset", "core-lock", "fan", "miner-start", "miner-stop",
+                                     "miner-restart", "pause", "resume", "switch-coin", "reboot", "shutdown"])
+    ac.add_argument("value", nargs="?", help="watts | MHz | pct|auto | coin")
+    ac.add_argument("--gpu", help="GPU uuid or index")
+    ac.add_argument("--actor", default="user", choices=["user", "claude", "rule", "optimizer"])
+    ac.add_argument("--reason", required=True)
+    ac.add_argument("--run-id")
+    ac.set_defaults(fn=cmd_act)
+    pr = sub.add_parser("profile", help="per-GPU setting profiles")
+    pr.add_argument("sub", choices=["show", "save-current", "restore"])
+    pr.add_argument("--gpu", required=True)
+    pr.add_argument("--status", default="known_good", choices=["active", "known_good"])
+    pr.add_argument("--actor", default="user")
+    pr.add_argument("--reason", default="")
+    pr.set_defaults(fn=cmd_profile)
+    tr = sub.add_parser("trial", help="bounded, self-reverting setting trials")
+    tr.add_argument("sub", choices=["list", "start", "abort", "tick"])
+    tr.add_argument("--gpu")
+    tr.add_argument("--key", choices=["pl_w", "core_offset_mhz", "mem_offset_mhz", "core_lock_mhz", "fan_pct"])
+    tr.add_argument("--value")
+    tr.add_argument("--hold", default="900", help="seconds (default 900)")
+    tr.add_argument("--kind", default="hourly", choices=["hourly", "optimize"])
+    tr.add_argument("--actor", default="user")
+    tr.add_argument("--reason", default="")
+    tr.add_argument("--run-id")
+    tr.set_defaults(fn=cmd_trial)
+    inc = sub.add_parser("incidents", help="recent incidents")
+    inc.add_argument("--limit", type=int, default=20)
+    inc.set_defaults(fn=cmd_incidents)
+    al = sub.add_parser("actions", help="recent action log rows")
+    al.add_argument("--limit", type=int, default=30)
+    al.set_defaults(fn=cmd_actions)
     return p
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        args.fn(args)
+        rc = args.fn(args)
+        return int(rc or 0)
     except KeyboardInterrupt:
         return 130
     except Exception as e:

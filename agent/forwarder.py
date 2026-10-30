@@ -27,7 +27,7 @@ class Forwarder:
         self._stop = threading.Event()
 
     def flush_once(self) -> int:
-        rows = self.db.outbox_peek(self.batch)
+        rows = self.db.outbox_peek(self.batch, exclude=("notify",))
         if not rows:
             return 0
         ids = [r["id"] for r in rows]
