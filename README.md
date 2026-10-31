@@ -17,6 +17,8 @@ Status: M1–M7 built and unit-tested against the simulator (46 tests). Items th
 verified from the build sandbox are listed under *Unverified on real hardware* below.
 
 ## Install (every host)
+Step-by-step checklist with every account, install, secret and verification: **`docs/setup-checklist.md`**.
+
 Windows (elevated PowerShell), Python 3.11+ and Git installed:
 ```powershell
 git clone <repo> C:\rig-overseer; cd C:\rig-overseer
@@ -112,7 +114,7 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
 | Claude Code CLI flags on the installed version | `rigctl claude-run hourly --dry` then run it manually once | `agent/claude_runner.py` (`cli_args`, `TOOLS`) |
 
 ## Docs
-`docs/runbook.md` (what to do when an alert fires) · `docs/sensors.md` (what each OS cannot expose) ·
+`docs/setup-checklist.md` (hook-up checklist) · `docs/runbook.md` (what to do when an alert fires) · `docs/sensors.md` (what each OS cannot expose) ·
 `docs/architecture.md` · `docs/system-changes.md` (every OS/software change with undo) · `CLAUDE.md`.
 
 ## Tests
