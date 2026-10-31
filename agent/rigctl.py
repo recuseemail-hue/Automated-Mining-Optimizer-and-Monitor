@@ -334,7 +334,12 @@ def cmd_coins(args):
     from .selector import Selector
     sel = Selector(cfg, st["db"])
     if args.sub == "probe":
-        print(json.dumps(sel.fetch_raw(), indent=1)[:8000])
+        if cfg.get("selector.source.provider") == "hashrate_no":
+            from .profit_sources import HashrateNoSource
+            models = sorted({g["model"] for g in st["db"].gpus_for_host(st["collector"].host_id)}) or ["NVIDIA GeForce RTX 3080"]
+            print(json.dumps(HashrateNoSource(cfg, st["db"]).probe(models[0]), indent=1, default=str)[:12000])
+        else:
+            print(json.dumps(sel.fetch_raw(), indent=1)[:8000])
         return
     if args.sub == "fork":
         print(json.dumps(sel.set_fork(activation_height=args.height, activated=True if args.activated else None, note=args.note or ""),

@@ -68,7 +68,11 @@ class Selector:
             if needle == "as_of":
                 continue
             if needle.lower() in (model or "").lower() and coin in coins:
-                return dict(coins[coin], seed=True)
+                d = dict(coins[coin], seed=True)
+                for k in ("hashrate", "power_w", "gross_usd_day"):      # YAML reads 105e12 as a string
+                    if d.get(k) is not None:
+                        d[k] = float(d[k])
+                return d
         return None
 
     def learn_perf(self, model: str, coin: str, hashrate: float, power_w: float) -> None:
@@ -110,15 +114,40 @@ class Selector:
                 seed_age = now - time.mktime(time.strptime(str(seed_as_of), "%Y-%m-%d"))
             except ValueError:
                 seed_age = None
+        hn: dict[str, tuple[dict, dict]] = {}
+        if provider == "hashrate_no":
+            from .profit_sources import HashrateNoSource
+            src_obj = HashrateNoSource(self.cfg, self.db, clock=self.clock)
+            for model in models:
+                hn[model] = src_obj.estimates(model)
+                if hn[model][1].get("error"):
+                    meta["error"] = hn[model][1]["error"]
+            meta["verified"] = bool(self.s.get("hashrate_no", {}).get("verified", src.get("verified", False)))
         for model in models:
             for coin, cat in self.catalog.items():
                 perf = self.model_perf(model, coin)
+                est_hn = (hn.get(model, ({}, {}))[0]).get(coin)
+                if not perf and est_hn and est_hn.get("hashrate"):
+                    perf = {"hashrate": est_hn["hashrate"], "power_w": est_hn.get("power_w"), "estimate": True}
                 if not perf:
                     out.append(CoinEstimate(coin, model, None, None, None, None, "none", None, note="no expected hashrate for this model"))
                     continue
                 hr, pw = perf.get("hashrate"), perf.get("power_w")
                 gross, source, age = None, "seed", seed_age
-                if coin in live and live[coin].get("reward") is not None and hr:
+                if est_hn and est_hn.get("revenue_usd_day") is not None:
+                    hmeta = hn[model][1]
+                    # revenue scales with our real hashrate once we have learned it for this coin
+                    if est_hn.get("hashrate") and hr and not perf.get("estimate"):
+                        gross = float(est_hn["revenue_usd_day"]) * (hr / est_hn["hashrate"])
+                    else:
+                        gross = float(est_hn["revenue_usd_day"])
+                    if pw is None:
+                        pw = est_hn.get("power_w")
+                    source = hmeta.get("source", "hashrate_no")
+                    age = hmeta.get("age_s")
+                    if est_hn.get("updated"):
+                        age = max(age or 0.0, now - est_hn["updated"])
+                elif coin in live and live[coin].get("reward") is not None and hr:
                     unit = MINERSTAT_UNITS.get(str(live[coin].get("unit") or "H").upper(), None) or UNIT_FACTORS.get(str(live[coin].get("unit")).lower(), 1.0)
                     coins_day = float(live[coin]["reward"]) * (hr / unit)
                     gross = coins_day * float(live[coin].get("price") or 0)

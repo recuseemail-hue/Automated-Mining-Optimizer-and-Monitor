@@ -95,21 +95,34 @@ selector:
   min_gain_pct: 15                # switch only if the best alternative beats the current coin by this much ...
   consecutive_checks: 2           # ... on this many consecutive checks
   max_data_age_s: 21600           # never act on profitability data older than 6 h
-  # Profitability source. `manual` uses the seed table below (dashboard/tests only; it is never fresh
-  # enough to trigger a switch). `http_json` is a generic fetcher: UNVERIFIED example for minerstat;
-  # run `rigctl coins probe` on the rig and fix the field paths, then set verified: true.
+  # Profitability source. `hashrate_no` (recommended): per-GPU-model estimates from hashrate.no, API key in
+  # secret HASHRATE_NO_KEY. `manual` uses the seed table below (dashboard/tests only; never fresh enough to
+  # trigger a switch). `http_json` is a generic per-coin fetcher (UNVERIFIED minerstat example).
+  # Run `rigctl coins probe` on the rig, fix the field paths, then set verified: true.
   source:
-    provider: manual              # manual | http_json
+    provider: hashrate_no         # hashrate_no | manual | http_json
     url: https://api.minerstat.com/v2/coins?list=${COINS}
     fields: {list: "", coin: coin, reward_per_unit_day: reward, unit: reward_unit, price_usd: price, updated: updated}
     verified: false
+  hashrate_no:                    # UNVERIFIED endpoint/auth/field names; all adjustable after `rigctl coins probe`
+    base_url: https://api.hashrate.no/v1
+    gpu_endpoint: /gpuEstimates   # per-GPU estimates: hashrate, power, revenue per coin
+    gpu_param: gpu                # query param carrying the GPU key (e.g. 3080, 3080Ti, 4070)
+    power_cost_param: powerCost
+    coins_endpoint: /coins        # optional second endpoint used only by `coins probe`
+    auth: {mode: query, name: apiKey}   # query | header
+    fields: {list: "", coin: coin, hashrate: hashrate, hashrate_unit: hashrateUnit, default_unit: "H/s",
+             power_w: power, revenue_usd_day: revenueUSD, profit_usd_day: profitUSD, updated: updated, algo: algorithm}
+    gpu_map: {}                   # model-name substring -> hashrate.no key, when the automatic "RTX 3080" -> "3080" is wrong
+    cache_ttl_s: 21600            # one call per model per 6 h at most
+    monthly_call_cap: 90          # free plan is ~100 calls/month
   # Expected hashrate (H/s) and power (W) per GPU model per coin: the tuner updates these from telemetry;
   # seed values from Oct 30 2026 (Kryptex, RTX 3080).
   seed:
     as_of: "2026-10-30"
     "RTX 3080":
-      PRL:  {hashrate: 105e12, power_w: 240, gross_usd_day: 2.11}
-      QTC:  {hashrate: 488e6,  power_w: 165, gross_usd_day: 1.69}
+      PRL:  {hashrate: 105.0e12, power_w: 240, gross_usd_day: 2.11}
+      QTC:  {hashrate: 488.0e6, power_w: 165, gross_usd_day: 1.69}
       XTM:  {hashrate: 1,      power_w: 192, gross_usd_day: 0.94}
       CFX:  {hashrate: 1,      power_w: 250, gross_usd_day: 0.79}
       IRON: {hashrate: 1,      power_w: 230, gross_usd_day: 0.45}

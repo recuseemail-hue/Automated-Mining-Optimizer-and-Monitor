@@ -115,6 +115,7 @@ def test_selector_hysteresis_and_fork(env):
     sel.learn_perf("RTX 3080", "XTM", 1.0, 192)
     sel.learn_perf("RTX 3080", "QTC", 488e6, 165)
     cfg.data["selector"]["source"]["provider"] = "http_json"
+    db.kv_set("selector.cache", None)
     live = {"PRL": {"reward": 2.0 / 105e12, "unit": "H", "price": 1.0, "age_s": 60},
             "XTM": {"reward": 2.4, "unit": "H", "price": 1.0, "age_s": 60},
             "QTC": {"reward": 3.0 / 488e6, "unit": "H", "price": 1.0, "age_s": 60}}

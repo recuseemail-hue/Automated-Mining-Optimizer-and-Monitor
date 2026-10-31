@@ -14,6 +14,8 @@ your job is to sanity-check it, watch for the Pearl fork, and execute only what 
 - Coins with `auto_switch: false` (e.g. Quantus) are never switched to automatically; the owner must
   approve them. Recommend, don't act.
 - Seed data (`source: seed`) is reference material only and never fresh enough to trigger a switch.
+- `source: hashrate_no` rows come from hashrate.no's per-GPU estimates (their tuned settings); once this rig
+  has mined a coin, its own measured hashrate scales that coin's revenue (`estimates[].hashrate` shows which).
 
 ## Your job
 1. Read `context.estimates` and `context.reasoning`. Check for obvious data problems: a coin whose

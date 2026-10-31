@@ -37,6 +37,7 @@ and prints `rigctl sensors` (what this host can read and control). Then:
      optional `NTFY_TOKEN`, `HEALTHCHECKS_URL`
    - hub: `DASHBOARD_PASSWORD`, `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`)
    - fallback coins: `RIG_WALLET_XTM`, `RIG_WALLET_CFX` … (a coin without a wallet secret can never be switched to)
+   - hub: `HASHRATE_NO_KEY` (hashrate.no API key; the daily coin check uses one cached call per GPU model)
 3. `rigctl config --check`, `rigctl gpus`, `rigctl collect`, `rigctl status`.
 4. `rigctl service install` → auto-start `agent` (and `web` on the hub) at boot, restart on failure.
 5. Hub: `rigctl schedule install` → hourly check and daily algorithm check in Task Scheduler / systemd.
@@ -65,7 +66,7 @@ rigctl trial start|list|abort|tick     bounded self-reverting trials
 rigctl profile show|save-current|restore --gpu N
 rigctl optimize [--gpu N|all] [--goal max-hashrate|max-efficiency|target-temp] [--window-min 45] [--cap-min 180]
 rigctl tune [--pretty]         hourly deterministic pre-check
-rigctl coins table|json|probe|fork     profitability + hysteresis decision; record Pearl fork status
+rigctl coins table|json|probe|fork     profitability (hashrate.no per GPU model) + hysteresis decision; Pearl fork status
 rigctl claude-run hourly|algo_check|incident [--dry]   headless Claude run (hub)
 rigctl schedule show|plan|install      OS scheduler registration for the Claude runs
 rigctl service plan|install|uninstall|status           auto-start services
@@ -105,7 +106,7 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
 |---|---|---|
 | PeakMiner `/summary` JSON keys and CLI flags | `rigctl miner dump`; compare with `tests/fixtures/peakminer_summary.json` | `agent/miner/peakminer.py` (`parse_summary`, `command`) |
 | Kryptex stats API endpoint and fields | `rigctl pool probe` | `pool.stats_url`, `pool.fields`, then `pool.verified: true` |
-| Profitability source (minerstat example) | `rigctl coins probe` | `selector.source.*`, then `verified: true` |
+| hashrate.no API (endpoint paths, auth, field names) | `rigctl secret set HASHRATE_NO_KEY`, then `rigctl coins probe` | `selector.hashrate_no.*`, then `verified: true` |
 | NVML fan / VF-offset writes on Windows GeForce | `rigctl sensors --probe-write` | if refused: fan stays on the driver curve; offsets via the miner's own flags (`miner.extra_args`) |
 | GDDR6X memory-junction temperature source | `rigctl gpus` → `memj` column | miner API or LibreHardwareMonitor (`sensors.lhm_url`) |
 | Claude Code CLI flags on the installed version | `rigctl claude-run hourly --dry` then run it manually once | `agent/claude_runner.py` (`cli_args`, `TOOLS`) |
