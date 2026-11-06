@@ -123,7 +123,13 @@
       cursor: { points: { size: 8, fill: (u, i) => css(spec.series[i - 1].color), stroke: css('--surface'), width: 2 }, drag: { x: true, y: false } },
       legend: { show: false },
       hooks: { setCursor: [u => readout(st, u.cursor.idx)] },
-      scales: { x: { time: true }, y: { range: (u, mn, mx) => spec.zero ? [0, mx * 1.08 || 1] : [mn - (mx - mn) * .1, mx + (mx - mn) * .1] } },
+      scales: { x: { time: true }, y: { range: (u, mn, mx) => {
+        // a constant series (fixed fan %, locked clock, 100 % util) must still get a non-zero span or uPlot's tick generator fails
+        if (mn == null || mx == null || !isFinite(mn) || !isFinite(mx)) return [0, 1];
+        if (spec.zero) return [0, mx > 0 ? mx * 1.08 : 1];
+        let pad = (mx - mn) * .1; if (!(pad > 0)) pad = Math.abs(mx) * 0.01 || 1;
+        return [mn - pad, mx + pad];
+      } } },
       axes: [
         { stroke: ink2, grid: { show: false }, ticks: { stroke: axis, width: 1 }, font: '11px system-ui', gap: 6 },
         { stroke: ink2, grid: { stroke: grid, width: 1 }, ticks: { show: false }, font: '11px system-ui', size: 48, gap: 6,
@@ -148,7 +154,8 @@
     t.append(tbl);
   }
   new ResizeObserver(() => charts.forEach(st => st.u && st.u.setSize({ width: st.plot.clientWidth, height: 200 }))).observe(document.body);
-  document.addEventListener('themechange', () => charts.forEach(st => st.data && drawChart(st, Object.fromEntries([['ts', st.data[0]], ...st.spec.series.map((s, i) => [s.key, st.data[i + 1].map(v => v)])]))));
+  document.addEventListener('themechange', () => charts.forEach(st => { if (!st.data) return;
+    try { drawChart(st, Object.fromEntries([['ts', st.data[0]], ...st.spec.series.map((s, i) => [s.key, st.data[i + 1].map(v => v)])])); } catch (e) { console.error(e); } }));
 
   const RO = {};
 
@@ -211,8 +218,10 @@
       charts.forEach(st => st.box.classList.add('loading'));
       let cols = await api(`/api/gpus/${id}/series?hours=${hours}&res=${hours <= 1 ? '15s' : '5m'}`);
       if (cols && (!cols.ts || cols.ts.length < 2) && hours <= 1) cols = await api(`/api/gpus/${id}/series?hours=${hours}&res=5m`);
-      if (!cols) return; charts.forEach(st => drawChart(st, cols));
+      if (!cols) return;
+      charts.forEach(st => { try { drawChart(st, cols); } catch (e) { console.error(spec_name(st), e); st.box.classList.remove('loading'); } });
     }
+    const spec_name = st => st.spec.title;
     async function detail() {
       const d = await api(`/api/gpus/${id}/detail`); if (!d) return;
       const g = d.gpu, s = g.sample || {};
