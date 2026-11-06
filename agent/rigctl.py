@@ -438,8 +438,11 @@ def cmd_secret(args):
         val = args.value or getpass.getpass(f"{args.name}: ")
         print(f"{args.name} stored in {set_secret_store(args.name, val)}")
     else:
-        names = ["RIG_WALLET_PRL", "RIG_WALLET_XTM", "RIG_WALLET_CFX", "NTFY_TOPIC", "NTFY_TOKEN", "RIG_HUB_TOKEN",
-                 "DASHBOARD_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "HEALTHCHECKS_URL"]
+        payout = str(cfg.get("pool.unmineable.payout_coin", "BTC")).upper()
+        names = [f"RIG_WALLET_{payout}", "RIG_WALLET_PRL", "RIG_WALLET_QTC", "NTFY_TOPIC", "NTFY_TOKEN", "RIG_HUB_TOKEN",
+                 "DASHBOARD_PASSWORD", "HASHRATE_NO_KEY", "PEAKMINER_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
+                 "HEALTHCHECKS_URL"]
+        print(f"pool.provider={cfg.get('pool.provider')} payout={payout if cfg.get('pool.provider') == 'unmineable' else 'mined coin'}")
         for n in names:
             print(f"{n:24} {'set' if get_secret(n) else '-'}")
 
