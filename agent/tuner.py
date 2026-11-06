@@ -125,6 +125,8 @@ class Tuner:
                 return {"key": "fan_pct", "value": min(c["fan_pct"][1], s["fan_pct"] + c["fan_step_pct"]), "why": "temperature over target: more fan first"}
             if (s.get("mem_offset_mhz") or 0) > 0 and cur.memj_max and cur.memj_max > t.get("memj_c_max", 100):
                 return {"key": "mem_offset_mhz", "value": max(c["mem_offset_mhz"][0], s["mem_offset_mhz"] - c["mem_step_mhz"]), "why": "memory junction over target: lower memory offset"}
+            if s.get("core_lock_mhz") and s["core_lock_mhz"] - 50 >= c["core_lock_mhz"][0]:
+                return {"key": "core_lock_mhz", "value": int(s["core_lock_mhz"] - 50), "why": "temperature over target: lower the core clock lock 50 MHz"}
             if s["pl_w"] and s["pl_w"] - step_w >= lo:
                 return {"key": "pl_w", "value": round(s["pl_w"] - step_w, 1), "why": "temperature over target: lower power limit one step"}
             return {"key": None, "value": None, "why": "already at the power floor; escalate to Claude/owner (fan curve, airflow)"}

@@ -69,6 +69,12 @@ class GpuBackend:
     def reset_locked_core_clock(self, uuid: str) -> None:
         raise NotSupported("reset locked core clock")
 
+    def set_locked_mem_clock(self, uuid: str, min_mhz: int, max_mhz: int) -> None:
+        raise NotSupported("locked memory clock")
+
+    def reset_locked_mem_clock(self, uuid: str) -> None:
+        raise NotSupported("reset locked memory clock")
+
     def set_core_offset_mhz(self, uuid: str, mhz: int) -> None:
         raise NotSupported("core offset")
 

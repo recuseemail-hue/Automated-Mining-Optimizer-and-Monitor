@@ -226,6 +226,9 @@ def cmd_act(args):
     elif k == "core-lock":
         r = a.set_core_lock(args.gpu, int(args.value), actor, reason, run_id=rid) if args.value not in (None, "reset") \
             else a.reset_core_lock(args.gpu, actor, reason, run_id=rid)
+    elif k == "mem-lock":
+        r = a.set_mem_lock(args.gpu, int(args.value), actor, reason, run_id=rid) if args.value not in (None, "reset") \
+            else a.reset_mem_lock(args.gpu, actor, reason, run_id=rid)
     elif k == "fan":
         r = a.set_fan(args.gpu, None if args.value in (None, "auto") else int(args.value), actor, reason, run_id=rid)
     elif k == "miner-start":
@@ -503,7 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
     si.set_defaults(fn=cmd_sim)
     sub.add_parser("agent", help="run the agent service (watchdog + collector [+ forwarder]) in the foreground").set_defaults(fn=cmd_agent)
     ac = sub.add_parser("act", help="allowlisted control action (clamped, logged)")
-    ac.add_argument("what", choices=["pl", "core-offset", "mem-offset", "core-lock", "fan", "miner-start", "miner-stop",
+    ac.add_argument("what", choices=["pl", "core-offset", "mem-offset", "core-lock", "mem-lock", "fan", "miner-start", "miner-stop",
                                      "miner-restart", "pause", "resume", "switch-coin", "reboot", "shutdown"])
     ac.add_argument("value", nargs="?", help="watts | MHz | pct|auto | coin")
     ac.add_argument("--gpu", help="GPU uuid or index")
@@ -521,7 +524,7 @@ def build_parser() -> argparse.ArgumentParser:
     tr = sub.add_parser("trial", help="bounded, self-reverting setting trials")
     tr.add_argument("sub", choices=["list", "start", "abort", "tick"])
     tr.add_argument("--gpu")
-    tr.add_argument("--key", choices=["pl_w", "core_offset_mhz", "mem_offset_mhz", "core_lock_mhz", "fan_pct"])
+    tr.add_argument("--key", choices=["pl_w", "core_offset_mhz", "mem_offset_mhz", "core_lock_mhz", "mem_lock_mhz", "fan_pct"])
     tr.add_argument("--value")
     tr.add_argument("--hold", default="900", help="seconds (default 900)")
     tr.add_argument("--kind", default="hourly", choices=["hourly", "optimize"])

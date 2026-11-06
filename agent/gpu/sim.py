@@ -15,9 +15,9 @@ from pathlib import Path
 from .base import GpuBackend, GpuInfo, GpuSample, NotSupported
 
 DEFAULT_GPU = {
-    "name": "NVIDIA GeForce RTX 3080 (sim)",
+    "name": "NVIDIA GeForce SIM-3080 (simulated)",
     "stock_pl_w": 340.0, "min_pl_w": 100.0, "max_pl_w": 370.0, "vram_mb": 10240,
-    "pl_w": 240.0, "core_offset_mhz": 0, "mem_offset_mhz": 0, "locked_core": None,
+    "pl_w": 240.0, "core_offset_mhz": 0, "mem_offset_mhz": 0, "locked_core": None, "locked_mem": None,
     "fan_pct": None,                      # None -> auto
     "ambient_c": 30.0,
     "faults": {},                         # e.g. {"core_c": 92, "fan_rpm": 0, "missing": true, "memj_c": 108}
@@ -89,13 +89,17 @@ class SimBackend(GpuBackend):
         rej_rate = 0.0 if mem <= 1000 else min(0.5, (mem - 1000) / 400.0)   # GDDR6X: errors, not crashes
         if mem > 1000:
             hashrate *= 1 - rej_rate                                       # error correction eats hashrate
+        lmem = g.get("locked_mem")
+        if lmem:                                                           # measured on the 3080: 9251->5001 saves ~46 W, costs ~2.7 %
+            power -= max(0.0, 9501 - lmem) * 0.0108
+            hashrate *= 1 - 0.027 * min(1.0, max(0.0, (9501 - lmem) / 4500.0))
         core_c = g["ambient_c"] + power * 0.17 - (0 if g["fan_pct"] is None else (g["fan_pct"] - 60) * 0.15)
         memj_c = core_c + 18 + max(0, mem) / 100.0
         fan_pct = g["fan_pct"] if g["fan_pct"] is not None else min(100, max(35, 35 + (core_c - 50) * 2.5))
         core_mhz = g["locked_core"][1] if g["locked_core"] else 1400 + (eff_pl - 240) * 1.2 + (g["core_offset_mhz"] or 0)
         return {
             "power_w": power, "core_c": core_c, "memj_c": memj_c, "fan_pct": fan_pct,
-            "fan_rpm": fan_pct * 30, "core_mhz": core_mhz, "mem_mhz": 9501 + mem / 2.0,
+            "fan_rpm": fan_pct * 30, "core_mhz": core_mhz, "mem_mhz": (g.get("locked_mem") or 9501) + mem / 2.0,
             "hashrate": hashrate, "rej_rate": rej_rate,
         }
 
@@ -151,6 +155,14 @@ class SimBackend(GpuBackend):
     def reset_locked_core_clock(self, uuid: str) -> None:
         self._gpu(uuid)
         self._update(uuid, locked_core=None)
+
+    def set_locked_mem_clock(self, uuid: str, min_mhz: int, max_mhz: int) -> None:
+        self._gpu(uuid)
+        self._update(uuid, locked_mem=int(max_mhz))
+
+    def reset_locked_mem_clock(self, uuid: str) -> None:
+        self._gpu(uuid)
+        self._update(uuid, locked_mem=None)
 
     def set_core_offset_mhz(self, uuid: str, mhz: int) -> None:
         self._gpu(uuid)

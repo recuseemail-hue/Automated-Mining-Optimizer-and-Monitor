@@ -133,3 +133,28 @@ def test_managed_miner_lifecycle_is_live_in_dry_run_and_autostarts(cfg, db):
     cfg.data["miner"]["managed"] = False
     r = st["actions"].miner_stop("user", "test")
     assert r.ok and r.dry_run and st["miner"].stats().state == "running"
+
+
+def test_mem_lock_knob_and_3080_strategies(cfg, db):
+    """Memory lock is a first-class setting; the RTX 3080 override carries the measured strategies."""
+    from agent.optimizer import Optimizer
+    cfg.data["safety"]["dry_run"] = False
+    st = service.build(cfg)
+    st["collector"].register_gpus()
+    a = st["actions"]
+    r = a.set_mem_lock("GPU-SIM-0000", 5001, "user", "t")
+    assert r.ok and a.settings("GPU-SIM-0000")["mem_lock_mhz"] == 5001
+    s = st["gpu"].sample("GPU-SIM-0000")
+    assert s.mem_mhz == 5001 and s.power_w < 230                        # ~46 W saved in the sim model
+    assert not a.set_mem_lock("GPU-SIM-0000", 4000, "user", "t").ok      # below clamp
+    assert a.reset_mem_lock("GPU-SIM-0000", "user", "t").ok and a.settings("GPU-SIM-0000")["mem_lock_mhz"] is None
+    # profile restore carries the lock
+    a.apply_settings("GPU-SIM-0000", {"mem_lock_mhz": 5001}, "boot", "restore")
+    assert a.settings("GPU-SIM-0000")["mem_lock_mhz"] == 5001
+    # the real-card override produces core-lock + mem-lock steps, generic sim GPU keeps the defaults
+    opt = Optimizer(cfg, db, a, st["trials"], st["collector"])
+    steps = opt.strategy_steps("GPU-SIM-0000")
+    assert steps["A"][0]["mem_lock_mhz"] is None and steps["B"][0]["core_offset_mhz"] == 0
+    c3080 = cfg.clamps_for("NVIDIA GeForce RTX 3080")["optimize_strategies"]
+    assert c3080["A"]["mem_lock_mhz"] == 5001 and c3080["B"]["core_offset_mhz"] == [75, 100, 125, 150]
+    assert cfg.get("optimize.default_goal") == "max-hashrate"

@@ -173,6 +173,7 @@ clamps:
     core_step_mhz: 30
     mem_offset_mhz: [-500, 1200]
     mem_step_mhz: 100
+    mem_lock_mhz: [5001, 10501]  # memory clock lock range (GDDR6X idles at 5001; a big power saver on core-bound algos)
     fan_pct: [40, 100]
     fan_step_pct: 10
   models:
@@ -180,6 +181,12 @@ clamps:
       power_limit_pct: [55, 100]
       core_lock_mhz: [1200, 1950]
       mem_offset_mhz: [-500, 1200]
+      # Measured on the EVGA FTW3 Ultra, pearlhash (docs/tuning-notes.md): core-bound; memory lock 5001
+      # costs ~2.7 % hashrate and saves ~46 W. Stock 380 W = ~125 TH/s @ 377 W, 72 C.
+      optimize_strategies:
+        A: {pl_pct: 100, core_lock_mhz: [1800, 1700, 1600, 1400], mem_lock_mhz: 5001, mem_offset_mhz: 0}   # efficiency
+        B: {pl_pct: 100, core_offset_mhz: [75, 100, 125, 150], mem_offset_mhz: 0}                           # max hashrate
+        C: {pl_pct: 100, core_lock_mhz: [1875, 1850, 1800], mem_lock_mhz: 5001, mem_offset_mhz: 0}          # cool/balanced
 
 limits:
   miner_restarts_per_30min: 3
@@ -242,7 +249,7 @@ optimize:                        # rigctl optimize / the /optimize slash command
   hold_s: 300                    # per step (5-8 min is a stable reading); 45 min window -> ~2 steps per strategy
   steps: 4                       # max steps per strategy; the time budget usually cuts this
   worse_margin_pct: 3            # a step this much worse than baseline is reverted and ends the strategy
-  default_goal: max-efficiency   # max-hashrate | max-efficiency | target-temp
+  default_goal: max-hashrate     # power is free here: revenue first, temperature targets still gate every step
   strategies:                    # per-model overrides under clamps.models.<name>.optimize_strategies
     A:                           # efficiency undervolt: lower core lock + reduced power limit + moderate memory
       pl_pct: [75, 70, 65, 60]

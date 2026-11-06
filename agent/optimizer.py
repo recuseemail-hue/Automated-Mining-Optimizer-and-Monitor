@@ -101,13 +101,20 @@ class Optimizer:
         def lst(v, n):
             return list(v) if isinstance(v, list) else [v] * n
 
+        def mem_lock(v):
+            if v is None:
+                return None
+            lo, hi = c.get("mem_lock_mhz", [5001, 10501])
+            return int(min(max(int(v), lo), hi))
+
         out: dict[str, list[dict]] = {}
         a = strat.get("A", {})
         if a:
             n = self.steps
             pls, locks = lst(a.get("pl_pct", 70), n), lst(a.get("core_lock_mhz", 1400), n)
             out["A"] = [{"pl_w": pl(pls[i]), "core_lock_mhz": int(min(max(locks[i], c["core_lock_mhz"][0]), c["core_lock_mhz"][1])),
-                         "core_offset_mhz": 0, "mem_offset_mhz": int(min(a.get("mem_offset_mhz", 0), c["mem_offset_mhz"][1]))}
+                         "core_offset_mhz": 0, "mem_offset_mhz": int(min(a.get("mem_offset_mhz", 0), c["mem_offset_mhz"][1])),
+                         "mem_lock_mhz": mem_lock(a.get("mem_lock_mhz"))}
                         for i in range(min(n, len(pls), len(locks)))]
         b = strat.get("B", {})
         if b:
@@ -115,15 +122,18 @@ class Optimizer:
             cores, mems = lst(b.get("core_offset_mhz", 0), n), lst(b.get("mem_offset_mhz", 0), n)
             out["B"] = [{"pl_w": pl(b.get("pl_pct", 100)), "core_lock_mhz": None,
                          "core_offset_mhz": int(min(cores[i], c["core_offset_mhz"][1])),
-                         "mem_offset_mhz": int(min(mems[i], c["mem_offset_mhz"][1]))}
+                         "mem_offset_mhz": int(min(mems[i], c["mem_offset_mhz"][1])),
+                         "mem_lock_mhz": mem_lock(b.get("mem_lock_mhz"))}
                         for i in range(min(n, len(cores), len(mems)))]
         cc = strat.get("C", {})
         if cc:
             n = self.steps
             pls = lst(cc.get("pl_pct", 75), n)
-            out["C"] = [{"pl_w": pl(pls[i]), "core_lock_mhz": None, "core_offset_mhz": 0,
-                         "mem_offset_mhz": int(min(cc.get("mem_offset_mhz", 0), c["mem_offset_mhz"][1]))}
-                        for i in range(min(n, len(pls)))]
+            locks = lst(cc.get("core_lock_mhz"), n)
+            out["C"] = [{"pl_w": pl(pls[i]), "core_lock_mhz": None if locks[i] is None else int(min(max(locks[i], c["core_lock_mhz"][0]), c["core_lock_mhz"][1])),
+                         "core_offset_mhz": 0, "mem_offset_mhz": int(min(cc.get("mem_offset_mhz", 0), c["mem_offset_mhz"][1])),
+                         "mem_lock_mhz": mem_lock(cc.get("mem_lock_mhz"))}
+                        for i in range(min(n, len(pls), len(locks)))]
         return out
 
     # --- sampling during holds -------------------------------------------------------------------

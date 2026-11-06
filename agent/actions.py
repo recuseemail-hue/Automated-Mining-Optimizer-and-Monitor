@@ -22,11 +22,12 @@ from .platform import Platform
 log = logging.getLogger(__name__)
 
 ALLOWED_ACTIONS = (
-    "set_power_limit", "set_core_offset", "set_mem_offset", "set_core_lock", "reset_core_lock", "set_fan",
+    "set_power_limit", "set_core_offset", "set_mem_offset", "set_core_lock", "reset_core_lock", "set_mem_lock",
+    "reset_mem_lock", "set_fan",
     "apply_settings", "miner_start", "miner_stop", "miner_restart", "miner_pause_gpu", "miner_resume_gpu",
     "switch_coin", "reboot", "shutdown",
 )
-SETTING_KEYS = ("pl_w", "core_offset_mhz", "mem_offset_mhz", "core_lock_mhz", "fan_pct")
+SETTING_KEYS = ("pl_w", "core_offset_mhz", "mem_offset_mhz", "core_lock_mhz", "mem_lock_mhz", "fan_pct")
 
 
 class ActionError(Exception):
@@ -243,6 +244,37 @@ class Actions:
             self.gpu.set_locked_core_clock(uuid, mhz, mhz)
         self.db.kv_set(f"gpu.{uuid}.core_lock_mhz", mhz)   # NVML has no reliable getter for the lock
 
+    def set_mem_lock(self, ref: str | int, mhz: int, actor: str, reason: str, *, run_id: str | None = None,
+                     emergency: bool = False) -> ActionResult:
+        """Lock the memory clock (e.g. 5001 MHz on GDDR6X): a large power saving on core-bound algorithms."""
+        uuid = self.resolve(ref)
+        c = self.clamps(uuid)
+
+        def check(before):
+            self._bounded("mem_lock_mhz", mhz, *c.get("mem_lock_mhz", [5001, 10501]))
+
+        return self._run("set_mem_lock", actor, uuid=uuid, params={"mhz": mhz}, reason=reason, run_id=run_id,
+                         emergency=emergency, before_fn=lambda: self._mem_lock_state(uuid),
+                         apply_fn=lambda: self._apply_mem_lock(uuid, mhz), after_fn=lambda: self._mem_lock_state(uuid),
+                         check_fn=check)
+
+    def reset_mem_lock(self, ref: str | int, actor: str, reason: str, *, run_id: str | None = None,
+                       emergency: bool = False) -> ActionResult:
+        uuid = self.resolve(ref)
+        return self._run("reset_mem_lock", actor, uuid=uuid, params={}, reason=reason, run_id=run_id,
+                         emergency=emergency, before_fn=lambda: self._mem_lock_state(uuid),
+                         apply_fn=lambda: self._apply_mem_lock(uuid, None), after_fn=lambda: self._mem_lock_state(uuid))
+
+    def _mem_lock_state(self, uuid: str) -> int | None:
+        return self.db.kv_get(f"gpu.{uuid}.mem_lock_mhz")
+
+    def _apply_mem_lock(self, uuid: str, mhz: int | None) -> None:
+        if mhz is None:
+            self.gpu.reset_locked_mem_clock(uuid)
+        else:
+            self.gpu.set_locked_mem_clock(uuid, mhz, mhz)
+        self.db.kv_set(f"gpu.{uuid}.mem_lock_mhz", mhz)
+
     def set_fan(self, ref: str | int, pct: int | None, actor: str, reason: str, *, run_id: str | None = None,
                 emergency: bool = False) -> ActionResult:
         """pct=None returns the fan to the driver's automatic curve."""
@@ -269,7 +301,8 @@ class Actions:
         """Current tunable settings as a profile dict."""
         s = self.gpu.sample(uuid)
         return {"pl_w": s.pl_w, "core_offset_mhz": s.core_offset_mhz, "mem_offset_mhz": s.mem_offset_mhz,
-                "core_lock_mhz": self._lock_state(uuid), "fan_pct": self.db.kv_get(f"gpu.{uuid}.fan_manual_pct")}
+                "core_lock_mhz": self._lock_state(uuid), "mem_lock_mhz": self._mem_lock_state(uuid),
+                "fan_pct": self.db.kv_get(f"gpu.{uuid}.fan_manual_pct")}
 
     def apply_settings(self, ref: str | int, settings: dict, actor: str, reason: str, *, run_id: str | None = None,
                        emergency: bool = True) -> list[ActionResult]:
@@ -284,6 +317,11 @@ class Actions:
                 out.append(self.reset_core_lock(uuid, actor, reason, run_id=run_id, emergency=emergency))
             else:
                 out.append(self.set_core_lock(uuid, settings["core_lock_mhz"], actor, reason, run_id=run_id, emergency=emergency))
+        if "mem_lock_mhz" in settings and settings["mem_lock_mhz"] != cur.get("mem_lock_mhz"):
+            if settings["mem_lock_mhz"] is None:
+                out.append(self.reset_mem_lock(uuid, actor, reason, run_id=run_id, emergency=emergency))
+            else:
+                out.append(self.set_mem_lock(uuid, settings["mem_lock_mhz"], actor, reason, run_id=run_id, emergency=emergency))
         if settings.get("core_offset_mhz") is not None and settings["core_offset_mhz"] != cur.get("core_offset_mhz"):
             out.append(self.set_core_offset(uuid, settings["core_offset_mhz"], actor, reason, run_id=run_id, emergency=emergency))
         if settings.get("mem_offset_mhz") is not None and settings["mem_offset_mhz"] != cur.get("mem_offset_mhz"):
@@ -324,6 +362,9 @@ class Actions:
                 out.append(self.set_core_lock(uuid, target["core_lock_mhz"], actor, reason, run_id=run_id))
             else:
                 walk("core_lock_mhz", lambda v: self.set_core_lock(uuid, v, actor, reason, run_id=run_id), c["core_step_mhz"])
+        if "mem_lock_mhz" in target and target["mem_lock_mhz"] != cur.get("mem_lock_mhz"):
+            out.append(self.reset_mem_lock(uuid, actor, reason, run_id=run_id) if target["mem_lock_mhz"] is None
+                       else self.set_mem_lock(uuid, target["mem_lock_mhz"], actor, reason, run_id=run_id))
         walk("core_offset_mhz", lambda v: self.set_core_offset(uuid, v, actor, reason, run_id=run_id), c["core_step_mhz"])
         walk("mem_offset_mhz", lambda v: self.set_mem_offset(uuid, v, actor, reason, run_id=run_id), c["mem_step_mhz"])
         if "fan_pct" in target and target["fan_pct"] != cur.get("fan_pct"):

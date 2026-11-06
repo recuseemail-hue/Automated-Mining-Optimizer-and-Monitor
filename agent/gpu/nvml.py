@@ -212,6 +212,12 @@ class NvmlBackend(GpuBackend):
     def reset_locked_core_clock(self, uuid: str) -> None:
         self._raise(N.nvmlDeviceResetGpuLockedClocks, self._h(uuid))
 
+    def set_locked_mem_clock(self, uuid: str, min_mhz: int, max_mhz: int) -> None:
+        self._raise(N.nvmlDeviceSetMemoryLockedClocks, self._h(uuid), int(min_mhz), int(max_mhz))
+
+    def reset_locked_mem_clock(self, uuid: str) -> None:
+        self._raise(N.nvmlDeviceResetMemoryLockedClocks, self._h(uuid))
+
     def set_core_offset_mhz(self, uuid: str, mhz: int) -> None:
         if not hasattr(N, "nvmlDeviceSetGpcClkVfOffset"):
             raise NotSupported("core offset: nvml binding lacks nvmlDeviceSetGpcClkVfOffset")

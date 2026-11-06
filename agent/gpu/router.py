@@ -100,6 +100,12 @@ class ControlRouter(GpuBackend):
     def reset_locked_core_clock(self, uuid: str) -> None:
         self._write(uuid, "core_lock_reset", lambda: self.reader.reset_locked_core_clock(uuid), {"lcore": None})
 
+    def set_locked_mem_clock(self, uuid: str, min_mhz: int, max_mhz: int) -> None:
+        self._write(uuid, "mem_lock", lambda: self.reader.set_locked_mem_clock(uuid, min_mhz, max_mhz), {"lmem": int(max_mhz)})
+
+    def reset_locked_mem_clock(self, uuid: str) -> None:
+        self._write(uuid, "mem_lock_reset", lambda: self.reader.reset_locked_mem_clock(uuid), {"lmem": None})
+
     def set_core_offset_mhz(self, uuid: str, mhz: int) -> None:
         self._write(uuid, "core_offset", lambda: self.reader.set_core_offset_mhz(uuid, mhz), {"core": int(mhz)})
 
