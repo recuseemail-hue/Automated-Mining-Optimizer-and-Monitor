@@ -98,7 +98,7 @@ coins:
   PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 2.0, auto_switch: true,
          fork_sensitive: true}                # PIP-3 (FP8) would end RTX 30/40 mining; see selector.fork
   QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: "stratum+tcp://qtc.kryptex.network:7049", dev_fee_pct: 2.0,
-         auto_switch: true}                   # approved 2026-11-06 as the Pearl fallback. Under unmineable it needs a
+         auto_switch: true, hashrate_no_symbol: QUAN}                   # approved 2026-11-06 as the Pearl fallback. Under unmineable it needs a
                                               # pools.unmineable URL (none known yet); under kryptex it needs RIG_WALLET_QTC
   XTM:  {name: Tari C29, algo: cuckaroo29, miner: none, pool: xtm.kryptex.network:7033, dev_fee_pct: 0.0, auto_switch: true}
   CFX:  {name: Conflux, algo: octopus, miner: none, pool: cfx.kryptex.network:7030, dev_fee_pct: 0.0, auto_switch: true}
@@ -118,18 +118,15 @@ selector:
     url: https://api.minerstat.com/v2/coins?list=${COINS}
     fields: {list: "", coin: coin, reward_per_unit_day: reward, unit: reward_unit, price_usd: price, updated: updated}
     verified: false
-  hashrate_no:                    # UNVERIFIED endpoint/auth/field names; all adjustable after `rigctl coins probe`
+  hashrate_no:                    # v1 API: coins (per-coin USD estimate per hashrate unit) + gpuEstimates (best coin per GPU)
     base_url: https://api.hashrate.no/v1
-    gpu_endpoint: /gpuEstimates   # per-GPU estimates: hashrate, power, revenue per coin
-    gpu_param: gpu                # query param carrying the GPU key (e.g. 3080, 3080Ti, 4070)
-    power_cost_param: powerCost
-    coins_endpoint: /coins        # optional second endpoint used only by `coins probe`
-    auth: {mode: query, name: apiKey}   # query | header
-    fields: {list: "", coin: coin, hashrate: hashrate, hashrate_unit: hashrateUnit, default_unit: "H/s",
-             power_w: power, revenue_usd_day: revenueUSD, profit_usd_day: profitUSD, updated: updated, algo: algorithm}
-    gpu_map: {}                   # model-name substring -> hashrate.no key, when the automatic "RTX 3080" -> "3080" is wrong
-    cache_ttl_s: 21600            # one call per model per 6 h at most
-    monthly_call_cap: 90          # free plan is ~100 calls/month
+    coins_endpoint: coins
+    gpu_endpoint: gpuEstimates
+    fetch_gpu_estimates: true     # second call per refresh, used as a cross-check in the Claude context
+    gpu_map: {}                   # model-name substring -> hashrate.no GPU key when "RTX 3080" -> "3080" is wrong
+    cache_ttl_s: 21600            # one refresh per 6 h at most (2 calls); free plan ~100 calls/month
+    monthly_call_cap: 90
+    verified: false               # set true once `rigctl coins probe` shows sane usd_per_hs values
   # Expected hashrate (H/s) and power (W) per GPU model per coin: the tuner updates these from telemetry;
   # seed values from Oct 30 2026 (Kryptex, RTX 3080).
   seed:

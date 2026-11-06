@@ -120,9 +120,12 @@ class Selector:
             from .profit_sources import HashrateNoSource
             src_obj = HashrateNoSource(self.cfg, self.db, clock=self.clock)
             for model in models:
-                hn[model] = src_obj.estimates(model)
+                hn[model] = src_obj.estimates(model, self.model_perf)
                 if hn[model][1].get("error"):
                     meta["error"] = hn[model][1]["error"]
+                best, _ = src_obj.gpu_best(model)
+                if best:
+                    meta.setdefault("hashrate_no_best", {})[model] = {k: best.get(k) for k in ("key", "profit", "revenue", "profit24")}
             meta["verified"] = bool(self.s.get("hashrate_no", {}).get("verified", src.get("verified", False)))
         for model in models:
             for coin, cat in self.catalog.items():
@@ -135,19 +138,11 @@ class Selector:
                     continue
                 hr, pw = perf.get("hashrate"), perf.get("power_w")
                 gross, source, age = None, "seed", seed_age
-                if est_hn and est_hn.get("revenue_usd_day") is not None:
+                if est_hn and est_hn.get("usd_per_hs") is not None and hr:
                     hmeta = hn[model][1]
-                    # revenue scales with our real hashrate once we have learned it for this coin
-                    if est_hn.get("hashrate") and hr and not perf.get("estimate"):
-                        gross = float(est_hn["revenue_usd_day"]) * (hr / est_hn["hashrate"])
-                    else:
-                        gross = float(est_hn["revenue_usd_day"])
-                    if pw is None:
-                        pw = est_hn.get("power_w")
+                    gross = float(est_hn["usd_per_hs"]) * float(hr)       # live $/H/s x this rig's expected hashrate
                     source = hmeta.get("source", "hashrate_no")
                     age = hmeta.get("age_s")
-                    if est_hn.get("updated"):
-                        age = max(age or 0.0, now - est_hn["updated"])
                 elif coin in live and live[coin].get("reward") is not None and hr:
                     unit = MINERSTAT_UNITS.get(str(live[coin].get("unit") or "H").upper(), None) or UNIT_FACTORS.get(str(live[coin].get("unit")).lower(), 1.0)
                     coins_day = float(live[coin]["reward"]) * (hr / unit)

@@ -129,7 +129,7 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
 | PeakMiner (aligned with the official v2.20.5 README/API.md; not yet run live) | `rigctl miner dump`, `rigctl sensors --probe-write` (shows whether the miner's OC API path is available) | `agent/miner/peakminer.py`, `agent/gpu/router.py` |
 | unMineable PearlPoW stratum host and v4 stats API fields | unMineable advanced page; `rigctl pool probe` | `pool.unmineable.urls`, `pool.unmineable.fields`, then `verified: true` |
 | Kryptex stats API endpoint and fields (if used) | `rigctl pool probe` | `pool.stats_url`, `pool.fields`, then `pool.verified: true` |
-| hashrate.no API (endpoint paths, auth, field names) | `rigctl secret set HASHRATE_NO_KEY`, then `rigctl coins probe` | `selector.hashrate_no.*`, then `verified: true` |
+| hashrate.no `coinEstimateUnit` semantics (USD/day per unit of hashrate) | `rigctl coins probe` → `usd_per_hs` × your hashrate should match the site's RTX 3080 revenue | `selector.hashrate_no.verified: true` |
 | NVML fan / VF-offset writes on Windows GeForce | `rigctl sensors --probe-write` | if refused: fan stays on the driver curve; offsets via the miner's own flags (`miner.extra_args`) |
 | GDDR6X memory-junction temperature source | `rigctl gpus` → `memj` column | miner API or LibreHardwareMonitor (`sensors.lhm_url`) |
 | Claude Code CLI flags on the installed version | `rigctl claude-run hourly --dry` then run it manually once | `agent/claude_runner.py` (`cli_args`, `TOOLS`) |
