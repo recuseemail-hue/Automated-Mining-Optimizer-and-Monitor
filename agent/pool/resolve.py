@@ -45,7 +45,11 @@ def resolve_pool(cfg: Config, coin: str, worker: str = "rig") -> PoolTarget:
         secret = f"RIG_WALLET_{payout}"
         addr = get_secret(secret)
         ref = str(cfg.get("pool.unmineable.referral", "") or "").strip()
-        login = f"{payout}:{addr}.{worker}" + (f"#{ref}" if ref else "") if addr else None
+        alias = str(cfg.get("pool.unmineable.alias", "") or "").strip()
+        if alias:                      # an unMineable alias stands in for COIN:ADDRESS (same balance as the alias's account)
+            login = f"{alias}.{worker}" + (f"#{ref}" if ref else "")
+        else:
+            login = f"{payout}:{addr}.{worker}" + (f"#{ref}" if ref else "") if addr else None
         note = "" if url else f"no unMineable pool URL for {coin}/{algo} (pool.unmineable.urls or coins.{coin}.pools.unmineable)"
         return PoolTarget(provider, coin, algo, url, secret, payout, login, fee, note)
     url = pools.get("kryptex") or cat.get("pool")

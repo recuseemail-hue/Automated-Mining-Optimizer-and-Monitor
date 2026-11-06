@@ -12,6 +12,13 @@ def make_miner(cfg, gpu_backend=None) -> MinerBackend:
     if kind == "peakminer":
         from .peakminer import PeakMiner
         return PeakMiner(cfg)
+    if kind == "srbminer":
+        from .srbminer import SRBMiner
+        return SRBMiner(cfg)
+    if kind == "auto":
+        from .peakminer import PeakMiner
+        from .srbminer import AutoMiner, SRBMiner
+        return AutoMiner(cfg, PeakMiner(cfg), SRBMiner(cfg))
     raise ValueError(f"unknown miner backend {kind!r}")
 
 

@@ -181,7 +181,7 @@ class Selector:
         self.db.kv_set("selector.fork", st)
         return st
 
-    AVAILABLE_MINERS = ("peakminer", "sim")
+    AVAILABLE_MINERS = ("peakminer", "sim", "auto")
 
     def miner_available(self, coin: str) -> bool:
         return str(self.catalog.get(coin, {}).get("miner", "")) in self.AVAILABLE_MINERS

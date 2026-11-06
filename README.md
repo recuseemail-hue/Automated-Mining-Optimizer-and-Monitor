@@ -112,6 +112,10 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
   `coins.<C>.pools.<provider>`); otherwise it shows as "no pool URL" in `rigctl coins table`.
 
 ## Miner notes
+- `miner.backend: auto` (default) reads whichever miner is running: PeakMiner (managed, controllable) when its
+  API answers, otherwise the unMineable app's SRBMiner-MULTI read-only via its stats API (port taken from the
+  process command line). Set `miner.managed: false` while the app runs; the agent then observes and never starts
+  a second miner. `pool.unmineable.alias` makes PeakMiner log in as `ALIAS.worker`, exactly like the app.
 - PeakMiner v2.20.5 (closed source, 2 % dev fee) mines Pearl and Quantus; it does **not** mine Tari or Conflux,
   so those catalog entries are `miner: none` (listed, never switched to) until a second miner backend exists.
   Quantus is the approved automatic fallback (`auto_switch: true`); it needs a `RIG_WALLET_QTC` secret before a switch can happen.

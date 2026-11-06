@@ -50,7 +50,9 @@ sensors:
     url: null
 
 miner:
-  backend: peakminer    # peakminer | sim
+  backend: auto         # auto (PeakMiner when it answers, else read-only SRBMiner started by the unMineable app) | peakminer | srbminer | sim
+  srbminer:
+    api_port: 21550     # fallback only: the port is read from the running SRBMiner command line
   exe: C:\miners\peakminer\peakminer.exe
   managed: true         # the agent starts/stops/restarts the miner (do not also run start.bat by hand)
   api_port: 4068        # bound to 127.0.0.1; key in secret PEAKMINER_API_KEY (generated on first start)
@@ -67,7 +69,8 @@ pool:
   provider: unmineable         # unmineable (paid in pool.unmineable.payout_coin) | kryptex (paid in the mined coin)
   fee_pct: 1.0                 # kryptex fee
   unmineable:
-    payout_coin: BTC           # wallet = secret RIG_WALLET_BTC (e.g. your exchange BTC deposit address)
+    payout_coin: BTC           # wallet = secret RIG_WALLET_BTC (e.g. your exchange BTC deposit address); used for stats lookups
+    alias: ""                  # optional unMineable alias; when set the miner logs in as ALIAS.worker (same balance as that alias)
     referral: ""               # optional unMineable referral code: fee drops from 1% to 0.75%
     fee_pct: 1.0
     fee_pct_referral: 0.75
