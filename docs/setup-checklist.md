@@ -33,8 +33,9 @@ Install, in this order:
 - ☐ **Git for Windows** — `winget install Git.Git`.
 - ☐ **Tailscale** — install, sign in; note this machine's IP: `tailscale ip -4`.
 - ☐ **PeakMiner** — https://github.com/peakminer/peakminer/releases → `peakminer-<version>-windows-x86_64.zip` (v2.20.5 at the time of writing); compare the published SHA256 with `Get-FileHash <file>`. Unzip to `C:\miners\peakminer\`. Add that folder as a Defender exclusion (folder only, nothing global). Do **not** set up `start.bat` to run at login: the agent starts the miner itself (`miner.managed`).
-- ☐ **rig-overseer** — elevated PowerShell:
+- ☐ **rig-overseer** — elevated PowerShell (the first line lets local scripts run for your user; Windows blocks them by default):
   ```powershell
+  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force
   git clone https://github.com/recuseemail-hue/Automated-Mining-Optimizer-and-Monitor.git C:\rig-overseer
   cd C:\rig-overseer
   .\install.ps1
