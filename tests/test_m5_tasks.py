@@ -107,6 +107,7 @@ def test_convergence_after_three_flat_trials(env):
 def test_selector_hysteresis_and_fork(env):
     cfg, db, st, clock = env
     cfg.data["coins"]["XTM"]["miner"] = "peakminer"           # pretend a Tari backend exists for this test
+    cfg.data["coins"]["QTC"]["auto_switch"] = False           # this test checks the owner-approval gate
     sel = Selector(cfg, db, clock=clock)
     # seed data is stale -> never switches
     d = sel.decide(["RTX 3080"], "PRL")
@@ -155,6 +156,7 @@ def test_switch_coin_action(env, monkeypatch):
     assert st["miner"].stats().coin == "XTM" and db.kv_get("miner.coin_override") == "XTM"
     cfg.data["coins"]["CFX"]["miner"] = "peakminer"
     assert "RateLimited" in a.switch_coin("CFX", "claude", "t").error            # 1 per day
+    cfg.data["coins"]["QTC"]["auto_switch"] = False
     assert "owner approval" in a.switch_coin("QTC", "claude", "t", force=True).error
     fresh = service.build(cfg, clock=clock)
     assert fresh["miner"].active_coin()["coin"] == "XTM"                          # survives restart

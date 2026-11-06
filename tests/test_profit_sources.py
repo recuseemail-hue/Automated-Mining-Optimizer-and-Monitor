@@ -75,6 +75,7 @@ def test_selector_uses_hashrate_no_and_scales_by_learned_hashrate(env, monkeypat
     cfg, db, st, clock = env
     cfg.data["selector"]["source"]["provider"] = "hashrate_no"
     cfg.data["coins"]["XTM"]["miner"] = "peakminer"           # pretend a Tari backend exists for this test
+    cfg.data["coins"]["QTC"]["auto_switch"] = False           # this test checks the owner-approval gate
     monkeypatch.setattr(HashrateNoSource, "_fetch", staticmethod(lambda url, headers: SAMPLE))
     sel = Selector(cfg, db, clock=clock)
     d = sel.decide(["NVIDIA GeForce RTX 3080"], "PRL")
