@@ -16,7 +16,7 @@ Legend: ☐ every host · ☐H hub only · ☐W worker only · ☐P phone
 - ☐ **healthchecks.io** (optional) — create a check "rig-overseer hub", period 10 min, grace 5 min. Copy the ping URL.
 - ☐ **hashrate.no** — create an account, generate an API key (free plan is enough).
 - ☐ **Claude** — Pro or Max subscription on the account you'll use on the hub.
-- ☐ **Wallets** — official wallet app for each coin you may mine: Pearl now; Tari and Conflux before the fork. Save each **receive address**. Seed phrases stay offline and are never typed into the rig or into Claude.
+- ☐ **Wallets** — official wallet app for each coin you may mine: Pearl now; Quantus if you approve it as the fallback (PeakMiner cannot mine Tari or Conflux, so those need a second miner before they are useful). Save each **receive address**. Seed phrases stay offline and are never typed into the rig or into Claude.
 - ☐ **Kryptex** — your Pearl wallet address is your pool login; nothing to create.
 
 ## 2. Phone
@@ -28,11 +28,11 @@ Legend: ☐ every host · ☐H hub only · ☐W worker only · ☐P phone
 ## 3. Every mining machine (laptop now, rig later)
 
 Install, in this order:
-- ☐ NVIDIA driver, current GeForce release (no GeForce Experience needed).
+- ☐ **NVIDIA driver** — https://www.nvidia.com/en-us/drivers/ (GeForce RTX 3080, Windows 64-bit; no GeForce Experience/NVIDIA App needed).
 - ☐ **Python 3.12** — `winget install Python.Python.3.12` (tick "add to PATH" if using the installer).
 - ☐ **Git for Windows** — `winget install Git.Git`.
 - ☐ **Tailscale** — install, sign in; note this machine's IP: `tailscale ip -4`.
-- ☐ **PeakMiner** — official release from its GitHub releases page only; compare the published SHA256 with `Get-FileHash <file>`. Unzip to `C:\miners\peakminer\`. Add that folder as a Defender exclusion (folder only, nothing global).
+- ☐ **PeakMiner** — https://github.com/peakminer/peakminer/releases → `peakminer-<version>-windows-x86_64.zip` (v2.20.5 at the time of writing); compare the published SHA256 with `Get-FileHash <file>`. Unzip to `C:\miners\peakminer\`. Add that folder as a Defender exclusion (folder only, nothing global). Do **not** set up `start.bat` to run at login: the agent starts the miner itself (`miner.managed`).
 - ☐ **rig-overseer** — elevated PowerShell:
   ```powershell
   git clone https://github.com/recuseemail-hue/Automated-Mining-Optimizer-and-Monitor.git C:\rig-overseer
@@ -58,15 +58,15 @@ Install, in this order:
   gpus:
     - {uuid: GPU-xxxxxxxx-..., name: "3080 FTW3", control_enabled: false}
   ```
-- ☐ Start PeakMiner by hand once (Kryptex command from pool.kryptex.com, plus `--api-port 4068`) and confirm it mines.
-- ☐ **verify** `rigctl miner dump` → paste the JSON to Claude. If `rigctl status` shows hashrate `-`, the parser needs the real key names.
+- ☐ `rigctl act miner-start --reason "first start"` (live even in observe mode) → the miner starts with the command from `config.yaml` (coin, Kryptex pool, wallet.worker, API key, temp pause at 85 °C). Watch `%ProgramData%\rig-overseer\logs\peakminer.log` for accepted shares.
+- ☐ **verify** `rigctl miner dump` → paste the JSON to Claude only if `rigctl status` shows hashrate `-` (the parser follows the official API doc; a mismatch is a doc drift).
 - ☐ `rigctl collect` then `rigctl status` → one row with power, temperature, hashrate.
 - ☐ `rigctl service install` → agent auto-starts (and the web server on the hub). Check with `rigctl service status`.
 - ☐ Reboot once and confirm `rigctl status` keeps updating every 5 min without touching anything.
 
 ## 4. Hub only (dashboard, Claude runs)
 
-- ☐H **LibreHardwareMonitor** — install, Options → Remote Web Server → Run, port 8085; set it to start with Windows (minimized). This is the only source of CPU temperature and GDDR6X memory-junction temperature on Windows.
+- ☐H **LibreHardwareMonitor** — https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases (`LibreHardwareMonitor-net472.zip`), run as admin, Options → Remote Web Server → Run, port 8085; Options → Run on Windows startup + Start minimized. This is the only source of CPU temperature and GDDR6X memory-junction temperature on Windows.
 - ☐H `rigctl secret set DASHBOARD_PASSWORD`
 - ☐H `rigctl secret set HASHRATE_NO_KEY`
 - ☐H **Claude Code CLI** — `winget install Anthropic.ClaudeCode`, then in a terminal `claude setup-token`, sign in, copy the token → `rigctl secret set CLAUDE_CODE_OAUTH_TOKEN`.

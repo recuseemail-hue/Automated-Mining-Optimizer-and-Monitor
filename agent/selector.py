@@ -159,7 +159,9 @@ class Selector:
                     dev = float(cat.get("dev_fee_pct", 0)) / 100
                     net = gross * (1 - dev) * (1 - fee_pool) - (pw or 0) / 1000 * 24 * kwh
                 est = CoinEstimate(coin, model, hr, pw, gross, net, source, age)
-                if not self.minable(coin, model):
+                if not self.miner_available(coin):
+                    est.minable, est.note = False, f"no miner backend for {coin} (coins.{coin}.miner={cat.get('miner')})"
+                elif not self.minable(coin, model):
                     est.minable, est.note = False, "not minable on this model (Pearl FP8 fork)"
                 out.append(est)
         return out, meta
@@ -181,8 +183,15 @@ class Selector:
         self.db.kv_set("selector.fork", st)
         return st
 
+    AVAILABLE_MINERS = ("peakminer", "sim")
+
+    def miner_available(self, coin: str) -> bool:
+        return str(self.catalog.get(coin, {}).get("miner", "")) in self.AVAILABLE_MINERS
+
     def minable(self, coin: str, model: str) -> bool:
         cat = self.catalog.get(coin, {})
+        if not self.miner_available(coin):
+            return False
         if not cat.get("fork_sensitive"):
             return True
         if not self.fork_state()["activated"]:

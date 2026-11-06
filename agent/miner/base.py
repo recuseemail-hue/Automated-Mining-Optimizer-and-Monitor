@@ -6,6 +6,14 @@ from typing import Any
 UNIT_FACTORS = {"h/s": 1.0, "kh/s": 1e3, "mh/s": 1e6, "gh/s": 1e9, "th/s": 1e12}
 
 
+def norm_bus(bus: str | None) -> str | None:
+    """'00000000:06:00.0' (NVML) and '06:00.0' (PeakMiner) -> '06:00.0'."""
+    if not bus:
+        return None
+    b = str(bus).strip().lower()
+    return b[-7:] if len(b) >= 7 else b
+
+
 @dataclass
 class GpuMinerStats:
     index: int                      # miner's device index
@@ -37,9 +45,10 @@ class MinerStats:
     gpus: list[GpuMinerStats] = field(default_factory=list)
     raw: Any = None
     error: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def by_bus(self) -> dict[str, GpuMinerStats]:
-        return {g.bus_id.lower(): g for g in self.gpus if g.bus_id}
+        return {norm_bus(g.bus_id): g for g in self.gpus if g.bus_id}
 
     def by_index(self) -> dict[int, GpuMinerStats]:
         return {g.index: g for g in self.gpus}
@@ -47,6 +56,7 @@ class MinerStats:
 
 class MinerBackend:
     name = "base"
+    supports_oc_api = False
 
     def stats(self) -> MinerStats:
         raise NotImplementedError

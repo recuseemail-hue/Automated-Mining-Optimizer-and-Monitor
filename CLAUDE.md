@@ -41,8 +41,11 @@ Guardrails that always apply:
   go to 2×). The 5-minute logger and the 15-second watchdog never call an LLM. Low free RAM skips
   scheduled runs, never incident runs. `claude.hourly_gating` skips the call when there is no candidate.
 - **Anything beyond the clamps becomes a recommendation to Ashton**, not an action.
-- **Coins:** only `coins.<X>.auto_switch: true` may be switched to automatically (Pearl, Tari, Conflux).
-  Quantus and others need Ashton's approval. A coin without a wallet secret can never be switched to.
+- **Coins:** only `coins.<X>.auto_switch: true` with an installed miner backend may be switched to
+  automatically. PeakMiner mines Pearl and Quantus only; Tari/Conflux are `miner: none` until a second
+  miner backend exists. Quantus needs Ashton's approval. A coin without a wallet secret can never be switched to.
+- **Miner lifecycle** (start/stop/restart/pause/resume) is live whenever `miner.managed: true`, even in
+  dry-run; GPU settings, coin switches, reboot/shutdown obey `safety.dry_run`.
 
 ## Layout
 `agent/` collector, watchdog, actions, trials, scoring, optimizer, tuner, selector, claude_runner,
@@ -60,9 +63,10 @@ uPlot) · `tasks/` one standalone prompt per Claude task (hourly, algo_check, in
 - Scheduled runs are local headless `claude -p` jobs started by Task Scheduler / systemd on the hub
   (cloud scheduled tasks cannot reach the rig unattended). Auth: subscription token from
   `claude setup-token`; an API key is capped per run by `claude.max_budget_usd`.
-- Known UNVERIFIED items (marked in code/docs; verify on the rig, never assume): PeakMiner `/summary`
-  JSON shape and CLI flags, Kryptex API endpoints, profitability source, Windows fan/offset writes via
-  NVML, memory-junction temperature source, exact Claude Code CLI flags on the installed version.
+- PeakMiner integration follows the official v2.20.5 README/API.md (`/summary` in H/s, `--api-control
+  pause,oc`, `/control/oc/{gpu}` as the fallback write path). Still UNVERIFIED on the rig: Kryptex API
+  endpoints, hashrate.no field names, which NVML writes Windows refuses, memory-junction temperature
+  source (LibreHardwareMonitor), exact Claude Code CLI flags on the installed version.
 - Scope: v1 is this rig; laptops join as workers (expect OEM-locked power limits/fans). Do not add
   features beyond the brief without asking; if an extra change would materially help, explain it
   briefly and ask first. Ask a specific question instead of guessing when a change could be destructive.

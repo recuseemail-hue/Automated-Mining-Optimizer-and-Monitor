@@ -1,17 +1,24 @@
 {
-  "_note": "ASSUMED shape for PeakMiner GET /summary. Replace with real output from `rigctl miner dump` on the rig, then tighten parse_summary().",
-  "version": "peakminer x.y.z",
-  "algo": "pearl",
-  "coin": "PRL",
-  "pool": "prl.kryptex.network:7048",
-  "worker": "rig1",
-  "uptime": 86400,
+  "_note": "Shape from PeakMiner API.md (v2.20.5): hashrate in H/s, per-GPU accepted/invalid shares, pci_bus_id short form, status null|paused.",
+  "version": "2.20.5", "algo": "pearl", "uptime": 3600, "dev_fee_percent": 2.0,
+  "hashrate": 201000000000000.0, "power_w": 479, "hashrate_per_watt": 419624217118.9,
+  "accepted_shares": 3022, "invalid_shares": 5, "efficiency_pct": 99.8,
+  "last_share_at": 1792666769, "eta_share_secs": 51.1, "effort_pct": 4.4,
+  "pool": {
+    "url": "prl.kryptex.network:7048", "ping_ms": 48, "difficulty": 1.8e10, "connected": true,
+    "user": "prl1testwallet.rig1", "wallet": "prl1testwallet", "worker": "rig1",
+    "index": 0, "pools": ["prl.kryptex.network:7048"]
+  },
   "gpus": [
-    {"index": 0, "name": "NVIDIA GeForce RTX 3080", "bus_id": "00000000:01:00.0", "hashrate": 101200000,
-     "accepted": 1532, "rejected": 3, "invalid": 0, "temperature": 68, "memory_temperature": 94,
-     "power": 238, "fan": 72, "core_clock": 1410, "memory_clock": 9751, "status": "mining"},
-    {"index": 1, "name": "NVIDIA GeForce RTX 3080", "bus_id": "00000000:02:00.0", "hashrate": 99800000,
-     "accepted": 1490, "rejected": 2, "invalid": 1, "temperature": 70, "memory_temperature": 96,
-     "power": 241, "fan": 75, "core_clock": 1395, "memory_clock": 9751, "status": "mining"}
+    {"id": 0, "name": "RTX 3080", "pci_bus_id": "01:00.0", "utilization_pct": 100,
+     "hashrate": 101200000000000.0, "hashrate_per_watt": 425210084033.6,
+     "accepted_shares": 1532, "invalid_shares": 3,
+     "temperature_c": 68, "fan_pct": 72, "power_w": 238,
+     "mem_clock_mhz": 9751, "core_clock_mhz": 1410, "status": null},
+    {"id": 1, "name": "RTX 3080", "pci_bus_id": "02:00.0", "utilization_pct": 100,
+     "hashrate": 99800000000000.0, "hashrate_per_watt": 414107883817.4,
+     "accepted_shares": 1490, "invalid_shares": 2,
+     "temperature_c": 70, "fan_pct": 75, "power_w": 241,
+     "mem_clock_mhz": 9751, "core_clock_mhz": 1395, "status": null}
   ]
 }

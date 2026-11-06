@@ -14,7 +14,7 @@ from .collector import Collector
 from .config import Config
 from .db import Db
 from .forwarder import Forwarder
-from .gpu import make_backend
+from .gpu import make_backend, with_control_router
 from .heartbeat import Heartbeat
 from .incidents import IncidentEscalator
 from .log import setup_logging
@@ -35,6 +35,7 @@ def build(cfg: Config, *, clock=time.time, on_incident=None) -> dict:
     ov = db.kv_get("miner.coin_override")
     if ov and hasattr(miner, "coin_override"):
         miner.coin_override = ov
+    gpu = with_control_router(gpu, miner, cfg)
     plat = get_platform(cfg)
     pool = make_pool(cfg, db)
     col = Collector(cfg, db, gpu, miner, plat, pool)
@@ -58,7 +59,17 @@ def boot_restore(stack: dict) -> dict:
     stack["db"].log_action("boot_restore", "boot", True, False, host_id=col.host_id,
                            params={"aborted_trials": n, "restored": restored}, reason="service start")
     log.info("boot restore: aborted %d open trials; profiles %s", n, restored)
-    return {"aborted_trials": n, "restored": restored}
+    started = None
+    if stack["collector"].cfg.get("miner.managed", True):
+        # the agent owns the miner process: start it at boot (miner lifecycle is not under safety.dry_run)
+        try:
+            if not stack["miner"].is_running():
+                r = stack["actions"].miner_start("boot", "miner.managed: start at service boot")
+                started = r.ok
+        except Exception as e:
+            log.warning("miner autostart failed: %s", e)
+            started = False
+    return {"aborted_trials": n, "restored": restored, "miner_started": started}
 
 
 def run(cfg: Config) -> None:

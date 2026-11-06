@@ -33,6 +33,7 @@ collector:
 
 gpu:
   backend: auto         # auto | nvml | sim
+  control_backend: auto # auto (NVML, then the miner's OC API when NVML refuses) | nvml | miner
   sim:
     count: 2
     state_file: null    # null -> <data_dir>/sim_gpus.json (tests and fault injection poke this)
@@ -51,16 +52,16 @@ sensors:
 miner:
   backend: peakminer    # peakminer | sim
   exe: C:\miners\peakminer\peakminer.exe
-  api_url: http://127.0.0.1:4068/summary
+  managed: true         # the agent starts/stops/restarts the miner (do not also run start.bat by hand)
+  api_port: 4068        # bound to 127.0.0.1; key in secret PEAKMINER_API_KEY (generated on first start)
+  api_control: [pause, oc]   # PeakMiner >= 2.20: per-GPU pause/resume and in-place OC writes via its API
   api_timeout_s: 3
-  coin: PRL
-  algo: pearl
-  pool: prl.kryptex.network:7048
-  worker: ${RIG_WORKER_NAME}
-  dev_fee_pct: 3.0
-  extra_args: []
-  # hashrate unit the miner API reports in; collector normalises to H/s
-  api_hashrate_unit: kH/s
+  api_hashrate_unit: H/s     # PeakMiner /summary reports hashes per second
+  coin: PRL             # catalog key below; algo/pool/dev fee come from coins.<COIN>
+  worker: null          # null -> computer name
+  temp_stop_c: 85       # miner's own thermal pause (first line of defence, independent of the watchdog)
+  temp_start_c: 72
+  extra_args: []        # e.g. ["--devices", "0,1"]
 
 pool:
   provider: kryptex
@@ -82,13 +83,16 @@ economics:
 
 # Coin catalog for the algorithm check. Only auto_switch: true coins may be switched to without the
 # owner's OK. Each entry carries the miner command fragments for that coin. Wallet = secret RIG_WALLET_<COIN>.
+# `algo` is PeakMiner's --coin name; dev fee 2% per its README (v2.20.5). A coin whose `miner` is not an
+# installed backend is listed but never minable (Tari/Conflux need another miner: not integrated yet).
 coins:
-  PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 3.0, auto_switch: true,
+  PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 2.0, auto_switch: true,
          fork_sensitive: true}                # PIP-3 (FP8) would end RTX 30/40 mining; see selector.fork
-  XTM:  {name: Tari C29, algo: cuckaroo29, miner: peakminer, pool: xtm.kryptex.network:7033, dev_fee_pct: 3.0, auto_switch: true}
-  CFX:  {name: Conflux, algo: octopus, miner: peakminer, pool: cfx.kryptex.network:7030, dev_fee_pct: 3.0, auto_switch: true}
-  QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: qtc.kryptex.network:7040, dev_fee_pct: 3.0, auto_switch: false}
-  IRON: {name: IronFish, algo: fishhash, miner: peakminer, pool: iron.kryptex.network:7024, dev_fee_pct: 3.0, auto_switch: false}
+  QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: "stratum+tcp://qtc.kryptex.network:7049", dev_fee_pct: 2.0,
+         auto_switch: false}                  # owner approval pending (new coin, risk not reviewed)
+  XTM:  {name: Tari C29, algo: cuckaroo29, miner: none, pool: xtm.kryptex.network:7033, dev_fee_pct: 0.0, auto_switch: true}
+  CFX:  {name: Conflux, algo: octopus, miner: none, pool: cfx.kryptex.network:7030, dev_fee_pct: 0.0, auto_switch: true}
+  IRON: {name: IronFish, algo: fishhash, miner: none, pool: iron.kryptex.network:7024, dev_fee_pct: 0.0, auto_switch: false}
 
 selector:
   schedule: daily                 # daily | weekly (scheduler registration)

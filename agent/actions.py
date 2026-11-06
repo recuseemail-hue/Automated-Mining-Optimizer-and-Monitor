@@ -88,8 +88,15 @@ class Actions:
     def clamps(self, uuid: str) -> dict:
         return self.cfg.clamps_for(self.info(uuid).name)
 
-    def _dry(self, uuid: str | None, emergency: bool) -> tuple[bool, str | None]:
-        """(dry_run, refusal). Refusal means the action is logged but not applied and reported as not ok."""
+    LIFECYCLE = ("miner_start", "miner_stop", "miner_restart", "miner_pause_gpu", "miner_resume_gpu")
+
+    def _dry(self, uuid: str | None, emergency: bool, action: str | None = None) -> tuple[bool, str | None]:
+        """(dry_run, refusal). Refusal means the action is logged but not applied and reported as not ok.
+        Miner lifecycle (start/stop/restart/pause/resume) is live whenever miner.managed is true: it is the
+        rig's basic reliability, not a tuning change. GPU settings, coin switches and power actions obey
+        safety.dry_run and the per-GPU control flag."""
+        if action in self.LIFECYCLE and self.cfg.get("miner.managed", True):
+            return False, None
         if uuid is not None and not self.cfg.gpu_control_enabled(uuid):
             return True, "control_enabled=false for this GPU"
         if self.cfg.dry_run and not (emergency and self.cfg.get("safety.emergency_override_dry_run", False)):
@@ -134,7 +141,7 @@ class Actions:
 
     def _run(self, action: str, actor: str, *, uuid: str | None, params: dict, reason: str | None,
              run_id: str | None, emergency: bool, before_fn, apply_fn, after_fn, check_fn=None) -> ActionResult:
-        dry, refusal = self._dry(uuid, emergency)
+        dry, refusal = self._dry(uuid, emergency, action)
         before = None
         try:
             if action not in ALLOWED_ACTIONS:
@@ -373,6 +380,8 @@ class Actions:
         def check(_b):
             if coin not in catalog:
                 raise ActionError(f"coin {coin!r} not in config catalog")
+            if str(catalog[coin].get("miner", "")) not in ("peakminer", "sim"):
+                raise ActionError(f"no miner backend for {coin} (coins.{coin}.miner={catalog[coin].get('miner')})")
             if not catalog[coin].get("auto_switch", False) and actor != "user":
                 raise ActionError(f"coin {coin!r} requires owner approval (auto_switch=false)")
             if not force:

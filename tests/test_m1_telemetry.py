@@ -103,22 +103,26 @@ def test_prune(stack):
 
 def test_peakminer_parser_fixture():
     raw = json.loads((FIX / "peakminer_summary.json").read_text())
-    st = parse_summary(raw, "kH/s", "PRL")
-    assert st.state == "running" and st.coin == "PRL"
+    st = parse_summary(raw, "H/s", "PRL")
+    assert st.state == "running" and st.coin == "PRL" and st.algo == "pearl" and st.version == "2.20.5"
     assert len(st.gpus) == 2
     g0 = st.gpus[0]
-    assert g0.hashrate == 101_200_000 * 1e3          # kH/s -> H/s
-    assert g0.accepted == 1532 and g0.rejected == 3 and g0.bus_id == "00000000:01:00.0"
-    assert g0.memj_c == 94.0
-    assert st.total_hashrate == (101_200_000 + 99_800_000) * 1e3
-    assert st.accepted == 1532 + 1490
+    assert g0.hashrate == 101.2e12 and g0.accepted == 1532 and g0.rejected == 3 and g0.bus_id == "01:00.0"
+    assert g0.temp_c == 68 and g0.power_w == 238 and g0.memj_c is None and not g0.paused
+    assert st.total_hashrate == 201e12 and st.accepted == 3022 and st.rejected == 5
+    assert st.pool == "prl.kryptex.network:7048" and st.worker == "rig1" and st.extra["dev_fee_percent"] == 2.0
+    assert st.by_bus()["01:00.0"] is g0
 
 
-def test_peakminer_parser_tolerates_alternate_shape():
-    raw = {"devices": {"0": {"hr": 5000, "valid": 10, "temp": 60}}, "uptime_seconds": 120}
-    st = parse_summary(raw, "kH/s")
-    assert st.gpus[0].hashrate == 5e6 and st.gpus[0].accepted == 10 and st.uptime_s == 120
-    assert parse_summary([], "kH/s").state == "error"
+def test_peakminer_parser_paused_and_shapes():
+    raw = {"gpus": [{"id": 0, "hashrate": 0, "status": "paused", "accepted_shares": 1, "invalid_shares": 0},
+                    {"id": 1, "hashrate": 5e12, "status": None, "accepted_shares": 2, "invalid_shares": 0}], "uptime": 120}
+    st = parse_summary(raw, "H/s")
+    assert st.state == "running" and st.gpus[0].paused and not st.gpus[1].paused and st.total_hashrate == 5e12
+    raw["gpus"][1]["status"] = "paused"
+    assert parse_summary(raw, "H/s").state == "paused"
+    assert parse_summary([], "H/s").state == "error"
+    assert parse_summary({"gpus": [{"id": 0, "hashrate": 5}]}, "kH/s").gpus[0].hashrate == 5000
 
 
 def test_dig():

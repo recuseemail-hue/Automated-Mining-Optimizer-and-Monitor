@@ -17,6 +17,7 @@ from .config import Config
 from .db import Db
 from .gpu import GpuBackend, GpuInfo, GpuSample, NotSupported
 from .miner import MinerBackend, MinerStats
+from .miner.base import norm_bus
 from .platform import Platform
 from .pool import PoolClient
 
@@ -67,7 +68,7 @@ class Collector:
                 log.warning("GPU %s unreadable: %s", info.uuid, e)
                 out.append((info, None))
                 continue
-            m = (by_bus.get(info.bus_id.lower()) if info.bus_id else None) or by_idx.get(info.index)
+            m = (by_bus.get(norm_bus(info.bus_id)) if info.bus_id else None) or by_idx.get(info.index)
             if m is not None:
                 s.extra["miner_index"] = m.index
                 s.extra["hashrate"] = m.hashrate

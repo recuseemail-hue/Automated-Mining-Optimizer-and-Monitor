@@ -103,10 +103,22 @@ Measured with the simulator: agent 28 MB RSS, web 51 MB, idle CPU < 1 %. A `clau
 hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_mb` (incidents are not).
 `rigctl footprint` prints the live numbers.
 
+## Miner notes
+- PeakMiner v2.20.5 (closed source, 2 % dev fee) mines Pearl and Quantus; it does **not** mine Tari or Conflux,
+  so those catalog entries are `miner: none` (listed, never switched to) until a second miner backend exists.
+  Quantus is the only PeakMiner-supported fallback today and needs your approval (`auto_switch: true`).
+- `miner.managed: true`: the agent starts the miner at boot, restarts it when it dies, and pauses/resumes
+  GPUs through PeakMiner's control API (`--api-key` + `--api-control pause,oc`, key auto-generated into
+  `PEAKMINER_API_KEY`). Miner lifecycle is live even in `dry_run`; GPU settings and coin switches are not.
+  Do not also launch `start.bat` by hand.
+- Overclock writes go through NVML first and fall back to the miner's `/control/oc/{gpu}` API when the
+  driver refuses our process (`gpu.control_backend: auto`), which is the expected path for fan control on
+  Windows GeForce.
+
 ## Unverified on real hardware (check on the rig first)
 | Item | How to verify | Where to fix |
 |---|---|---|
-| PeakMiner `/summary` JSON keys and CLI flags | `rigctl miner dump`; compare with `tests/fixtures/peakminer_summary.json` | `agent/miner/peakminer.py` (`parse_summary`, `command`) |
+| PeakMiner (aligned with the official v2.20.5 README/API.md; not yet run live) | `rigctl miner dump`, `rigctl sensors --probe-write` (shows whether the miner's OC API path is available) | `agent/miner/peakminer.py`, `agent/gpu/router.py` |
 | Kryptex stats API endpoint and fields | `rigctl pool probe` | `pool.stats_url`, `pool.fields`, then `pool.verified: true` |
 | hashrate.no API (endpoint paths, auth, field names) | `rigctl secret set HASHRATE_NO_KEY`, then `rigctl coins probe` | `selector.hashrate_no.*`, then `verified: true` |
 | NVML fan / VF-offset writes on Windows GeForce | `rigctl sensors --probe-write` | if refused: fan stays on the driver curve; offsets via the miner's own flags (`miner.extra_args`) |

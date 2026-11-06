@@ -22,7 +22,7 @@ def _ctx(args):
 
 def _stack(cfg):
     from .collector import Collector
-    from .gpu import make_backend
+    from .gpu import make_backend, with_control_router
     from .miner import make_miner
     from .platform import get_platform
     from .pool import make_pool
@@ -30,6 +30,7 @@ def _stack(cfg):
     db = Db(cfg.db_path)
     gpu = make_backend(cfg)
     miner = make_miner(cfg, gpu)
+    gpu = with_control_router(gpu, miner, cfg)
     plat = get_platform(cfg)
     pool = make_pool(cfg, db)
     return db, Collector(cfg, db, gpu, miner, plat, pool)
@@ -62,7 +63,7 @@ def cmd_config(args):
 
 def cmd_gpus(args):
     cfg = _ctx(args)
-    from .gpu import make_backend
+    from .gpu import make_backend, with_control_router
     be = make_backend(cfg)
     for i in be.enumerate():
         s = be.sample(i.uuid)
@@ -76,7 +77,7 @@ def cmd_gpus(args):
 def cmd_sensors(args):
     """Report what this host can and cannot read/control. Run early on every new rig."""
     cfg = _ctx(args)
-    from .gpu import make_backend
+    from .gpu import make_backend, with_control_router
     from .platform import get_platform
     plat = get_platform(cfg)
     be = make_backend(cfg)
@@ -149,7 +150,7 @@ def cmd_status(args):
 
 def cmd_miner(args):
     cfg = _ctx(args)
-    from .gpu import make_backend
+    from .gpu import make_backend, with_control_router
     from .miner import make_miner
     gpu = make_backend(cfg)
     m = make_miner(cfg, gpu)
