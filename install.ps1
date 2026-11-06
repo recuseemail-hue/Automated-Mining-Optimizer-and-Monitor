@@ -12,11 +12,12 @@ if (-not (Test-Path .venv)) { python -m venv .venv }
 $data = Join-Path $env:ProgramData "rig-overseer"
 New-Item -ItemType Directory -Force -Path $data, (Join-Path $data "logs") | Out-Null
 if (-not (Test-Path config.local.yaml)) {
-@"
+  # single-quoted here-string: no PowerShell escaping inside (backticks/quotes are literal)
+@'
 host: {role: hub}            # hub | worker (workers: set hub.url to the hub's Tailscale address)
 miner: {exe: 'C:\miners\peakminer\peakminer.exe'}
-gpus: []                     # add {uuid: ..., control_enabled: true} after `rigctl gpus`
-"@ | Set-Content config.local.yaml
+gpus: []                     # add {uuid: ..., control_enabled: true} after rigctl gpus
+'@ | Set-Content -Encoding ascii config.local.yaml
   Write-Host "wrote config.local.yaml - edit host.role, miner.exe, gpus[]"
 }
 
