@@ -85,6 +85,10 @@ class Collector:
                 v = self._lhm.gpu_memory_junction(info.name, n)
                 if v is not None:
                     s.memj_c, s.extra["memj_source"] = v, "lhm"
+            if s.fan_rpm is None and self._lhm is not None:
+                rpm = self._lhm.gpu_fan_rpm(n)
+                if rpm is not None:
+                    s.fan_rpm = rpm                   # enables the real 0-RPM fan-failure rule
             out.append((info, s))
         return out
 

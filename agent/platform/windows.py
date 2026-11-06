@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
+import re
 import subprocess
 import time
 import urllib.request
@@ -44,16 +45,38 @@ class LhmReader:
     @staticmethod
     def _walk(node, path):
         yield path, node
+        # a node is identified by its text AND its icon (LHM names the CPU node after the chip, e.g.
+        # "AMD Ryzen 3 3100", while its ImageURL is images_icon/cpu.png)
+        tag = f"{node.get('Text', '')}|{node.get('ImageURL', '')}"
         for ch in node.get("Children", []) or []:
-            yield from LhmReader._walk(ch, path + [node.get("Text", "")])
+            yield from LhmReader._walk(ch, path + [tag])
 
     @staticmethod
     def _value(node) -> float | None:
-        v = str(node.get("Value", "")).split(" ")[0].replace(",", ".")
+        v = str(node.get("Value", "")).split(" ")[0]
+        if "," in v and "." in v:
+            v = v.replace(",", "")                      # 2,180.5
+        elif re.fullmatch(r"-?\d{1,3}(,\d{3})+", v):
+            v = v.replace(",", "")                      # 2,180 (thousands separator)
+        else:
+            v = v.replace(",", ".")                     # 52,4 (decimal comma locales)
         try:
             return float(v)
         except ValueError:
             return None
+
+    def gpu_fan_rpm(self, ordinal: int = 0) -> float | None:
+        """First fan RPM of the n-th GPU device (LHM 'GPU Fan 1' under the GPU node)."""
+        t = self.tree()
+        if not t:
+            return None
+        gpus: list[float] = []
+        for path, node in self._walk(t, []):
+            if not node.get("Children") and node.get("Text", "").lower().startswith("gpu fan") and \
+                    any("nvidia" in p.lower() or "amd" in p.lower() or "gpu" in p.lower() for p in path):
+                if node.get("Text", "").strip().lower().endswith("1") or not gpus:
+                    gpus.append(self._value(node))
+        return gpus[ordinal] if ordinal < len(gpus) else None
 
     def find(self, device_contains: str, sensor_contains: str) -> float | None:
         t = self.tree()
@@ -88,12 +111,20 @@ class WindowsPlatform(Platform):
         self.lhm = LhmReader(url)
 
     def cpu_temp_c(self) -> float | None:
-        v = self.lhm.find("cpu", "Core (Tctl/Tdie)") or self.lhm.find("cpu", "CPU Package") \
-            or self.lhm.find("cpu", "Core (Tdie)")
-        return v
+        for label in ("Core (Tctl/Tdie)", "CPU Package", "Core (Tdie)", "CCD1 (Tdie)", "Core Average", "CPU Core"):
+            v = self.lhm.find("cpu", label)
+            if v is not None:
+                return v
+        return None
 
     def cpu_power_w(self) -> float | None:
-        return self.lhm.find("cpu", "Package") if self.lhm.available else None
+        if not self.lhm.available:
+            return None
+        for label in ("Package", "CPU Package", "Core (SMU)"):
+            v = self.lhm.find("cpu", label)
+            if v is not None:
+                return v
+        return None
 
     def sensor_notes(self) -> dict[str, str]:
         notes = {
