@@ -50,7 +50,7 @@ Install, in this order:
   - ☐ `RIG_HUB_TOKEN` — any long random string; **identical on every machine**
   - ☐ `RIG_WALLET_QTC` — only with Kryptex: Quantus receive address (the approved fallback; no address = no switch)
   - ☐ `HEALTHCHECKS_URL` (optional)
-- ☐ Close the unMineable desktop app and any overclock tool (MSI Afterburner etc.) for good: the agent runs PeakMiner itself and owns the clocks; two controllers fight.
+- ☐ Close the unMineable desktop app and any overclock tool (MSI Afterburner etc.) for good: the agent runs PeakMiner itself and owns the clocks; two controllers fight. (To hand the GPU back to another miner temporarily: set `miner.managed: false` in config.local.yaml, `rigctl act miner-stop`, restart the agent task — stop is always live; start only happens when managed.)
 - ☐ Power settings: never sleep, never hibernate, lid close = do nothing, "restart automatically after power failure" in BIOS if available.
 - ☐ Windows Update: set active hours so it doesn't reboot mid-day; the agent auto-starts after any reboot regardless.
 - ☐ `rigctl config --check` → must print `config OK`.

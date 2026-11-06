@@ -149,8 +149,14 @@ def test_managed_miner_lifecycle_is_live_in_dry_run_and_autostarts(cfg, db):
     r = st["actions"].set_power_limit("GPU-SIM-0000", 230, "rule", "test")  # GPU settings still obey dry_run
     assert r.ok and r.dry_run
     cfg.data["miner"]["managed"] = False
-    r = st["actions"].miner_stop("user", "test")
-    assert r.ok and r.dry_run and st["miner"].stats().state == "running"
+    r = st["actions"].miner_stop("user", "test")                        # stopping is always live
+    assert r.ok and not r.dry_run and st["miner"].stats().state == "stopped"
+    r = st["actions"].miner_start("user", "test")                       # starting is not, when unmanaged
+    assert not r.ok and "managed=false" in r.error and st["miner"].stats().state == "stopped"
+    # an unmanaged, stopped miner never triggers a watchdog restart
+    for _ in range(50):
+        st["watchdog"].tick()
+    assert st["miner"].stats().state == "stopped" and db.count_actions_since("miner_restart", 0) == 0
 
 
 def test_mem_lock_knob_and_3080_strategies(cfg, db):

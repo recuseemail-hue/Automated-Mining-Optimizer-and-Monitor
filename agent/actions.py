@@ -90,14 +90,19 @@ class Actions:
         return self.cfg.clamps_for(self.info(uuid).name)
 
     LIFECYCLE = ("miner_start", "miner_stop", "miner_restart", "miner_pause_gpu", "miner_resume_gpu")
+    PROTECTIVE = ("miner_stop", "miner_pause_gpu")
 
     def _dry(self, uuid: str | None, emergency: bool, action: str | None = None) -> tuple[bool, str | None]:
         """(dry_run, refusal). Refusal means the action is logged but not applied and reported as not ok.
-        Miner lifecycle (start/stop/restart/pause/resume) is live whenever miner.managed is true: it is the
-        rig's basic reliability, not a tuning change. GPU settings, coin switches and power actions obey
-        safety.dry_run and the per-GPU control flag."""
-        if action in self.LIFECYCLE and self.cfg.get("miner.managed", True):
+        Stopping or pausing the miner only removes load, so it is always live. Starting/restarting/resuming
+        is live when miner.managed is true (the agent owns the miner). GPU settings, coin switches and power
+        actions obey safety.dry_run and the per-GPU control flag."""
+        if action in self.PROTECTIVE:
             return False, None
+        if action in self.LIFECYCLE:
+            if self.cfg.get("miner.managed", True):
+                return False, None
+            return True, "miner.managed=false: the agent does not start the miner"
         if uuid is not None and not self.cfg.gpu_control_enabled(uuid):
             return True, "control_enabled=false for this GPU"
         if self.cfg.dry_run and not (emergency and self.cfg.get("safety.emergency_override_dry_run", False)):

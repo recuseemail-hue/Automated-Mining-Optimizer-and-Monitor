@@ -252,19 +252,32 @@ class PeakMiner(MinerBackend):
         self.start()
 
     def stop(self) -> None:
+        """Stop PeakMiner. It runs a supervisor that respawns its worker, so kill parents before children and
+        verify nothing is left (otherwise a half-stopped miner keeps hashing next to whatever starts next)."""
+        import psutil
         if self._proc is not None and self._proc.poll() is None:
             self._proc.terminate()
             try:
                 self._proc.wait(15)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
-        else:
-            import psutil
-            for p in psutil.process_iter(["name"]):
-                if (p.info["name"] or "").lower().startswith(self.exe.stem.lower()):
-                    p.terminate()
         self._proc = None
-        time.sleep(1)
+        stem = self.exe.stem.lower()
+        for attempt in range(5):
+            procs = [p for p in psutil.process_iter(["name", "ppid"]) if (p.info["name"] or "").lower().startswith(stem)]
+            if not procs:
+                break
+            pids = {p.pid for p in procs}
+            parents = [p for p in procs if p.info["ppid"] not in pids] or procs      # supervisors first
+            for p in parents + [p for p in procs if p not in parents]:
+                try:
+                    p.kill() if attempt else p.terminate()
+                except psutil.Error:
+                    pass
+            time.sleep(1.5)
+        left = [p.pid for p in psutil.process_iter(["name"]) if (p.info["name"] or "").lower().startswith(stem)]
+        if left:
+            raise RuntimeError(f"peakminer still running after stop: pids {left}")
 
     # --- control API: pause / resume --------------------------------------------------------------
     def _control(self, path: str, body: dict) -> Any:

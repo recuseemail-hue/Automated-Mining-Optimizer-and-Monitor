@@ -230,6 +230,8 @@ class Watchdog:
             self._incident("miner_api_auth", "high", None, mstats.error or "miner API key mismatch", "none")
         down = mstats.state in ("stopped", "unreachable", "error") or (mstats.state == "running" and (hr or 0) <= 0)
         protected = any(st.ladder >= 2 for u, st in self.gpus.items() if u != "__host__")
+        if not self.cfg.get("miner.managed", True):
+            down = False                       # someone else runs the miner: observe, never restart
         if down and not protected:
             self.miner_down_since = self.miner_down_since or now
             # a miner that dies again soon after a rule restart is crash-looping: retry fast so the
