@@ -209,6 +209,10 @@ class AutoMiner(MinerBackend):
     def restart(self) -> None:
         self.peak.restart()
 
+    def fetch_raw(self):
+        self.stats()                                       # refresh which miner is live
+        return self.current.fetch_raw()
+
     def pause_gpu(self, index: int) -> None:
         self.current.pause_gpu(index)
 

@@ -25,3 +25,7 @@ Takeaways
   overpower rule trims the hungriest card, but plan core locks (~1700 → 255 W each) before adding GPU 3.
 - Miners seen for PearlPoW on unMineable: SRBMiner, LPMiner, PeakMiner, ForgeMiner. Only PeakMiner is
   integrated; SRBMiner-MULTI would also cover Tari/Conflux — candidate second backend.
+
+Miner comparison (same card, stock, pearlhash, 2026-11-06): SRBMiner-MULTI via the unMineable app reported
+~133 TH/s (567/3 shares) where PeakMiner 2.20.5 reported ~125 TH/s. Re-check over 24 h on the dashboard before
+concluding; if it holds, a managed SRBMiner backend is worth building (task: SRBMiner-MULTI backend).

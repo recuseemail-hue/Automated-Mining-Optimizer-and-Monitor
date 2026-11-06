@@ -78,6 +78,7 @@ def test_auto_miner_prefers_peakminer_then_reads_srbminer(cfg, monkeypatch):
     auto = AutoMiner(cfg, peak, srb)
     st = auto.stats()
     assert st.total_hashrate == 125.3e12 and auto.current is srb and not auto.supports_oc_api
+    assert auto.fetch_raw() is RAW                                       # dump follows the live miner
     with pytest.raises(RuntimeError, match="close it"):
         auto.start()                                                     # never two miners on the card
     monkeypatch.setattr(SRBMiner, "process", lambda self: None)
