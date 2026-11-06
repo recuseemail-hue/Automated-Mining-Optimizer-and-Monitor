@@ -13,10 +13,10 @@ from .db import Db
 from .log import setup_logging
 
 
-def _ctx(args):
+def _ctx(args, logname: str = "rigctl"):
     cfg = load_config(args.config)
     secrets.configure(cfg.secrets_file)
-    setup_logging(cfg.data_dir, "rigctl", cfg.get("logging.level", "INFO"))
+    setup_logging(cfg.data_dir, logname, cfg.get("logging.level", "INFO"))
     return cfg
 
 
@@ -206,7 +206,7 @@ def _live(args):
 
 
 def cmd_agent(args):
-    cfg = _ctx(args)
+    cfg = _ctx(args, "agent")          # long-running services get their own log file
     from . import service
     service.run(cfg)
 
@@ -291,7 +291,7 @@ def cmd_trial(args):
 
 
 def cmd_web(args):
-    cfg = _ctx(args)
+    cfg = _ctx(args, "web")
     from api.app import serve
     serve(cfg)
 
