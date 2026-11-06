@@ -89,7 +89,7 @@ coins:
   PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 2.0, auto_switch: true,
          fork_sensitive: true}                # PIP-3 (FP8) would end RTX 30/40 mining; see selector.fork
   QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: "stratum+tcp://qtc.kryptex.network:7049", dev_fee_pct: 2.0,
-         auto_switch: false}                  # owner approval pending (new coin, risk not reviewed)
+         auto_switch: true}                   # approved by the owner 2026-11-06 as the Pearl fallback (needs RIG_WALLET_QTC)
   XTM:  {name: Tari C29, algo: cuckaroo29, miner: none, pool: xtm.kryptex.network:7033, dev_fee_pct: 0.0, auto_switch: true}
   CFX:  {name: Conflux, algo: octopus, miner: none, pool: cfx.kryptex.network:7030, dev_fee_pct: 0.0, auto_switch: true}
   IRON: {name: IronFish, algo: fishhash, miner: none, pool: iron.kryptex.network:7024, dev_fee_pct: 0.0, auto_switch: false}

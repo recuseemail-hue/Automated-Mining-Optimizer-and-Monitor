@@ -106,7 +106,7 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
 ## Miner notes
 - PeakMiner v2.20.5 (closed source, 2 % dev fee) mines Pearl and Quantus; it does **not** mine Tari or Conflux,
   so those catalog entries are `miner: none` (listed, never switched to) until a second miner backend exists.
-  Quantus is the only PeakMiner-supported fallback today and needs your approval (`auto_switch: true`).
+  Quantus is the approved automatic fallback (`auto_switch: true`); it needs a `RIG_WALLET_QTC` secret before a switch can happen.
 - `miner.managed: true`: the agent starts the miner at boot, restarts it when it dies, and pauses/resumes
   GPUs through PeakMiner's control API (`--api-key` + `--api-control pause,oc`, key auto-generated into
   `PEAKMINER_API_KEY`). Miner lifecycle is live even in `dry_run`; GPU settings and coin switches are not.

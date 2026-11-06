@@ -16,7 +16,7 @@ Legend: ☐ every host · ☐H hub only · ☐W worker only · ☐P phone
 - ☐ **healthchecks.io** (optional) — create a check "rig-overseer hub", period 10 min, grace 5 min. Copy the ping URL.
 - ☐ **hashrate.no** — create an account, generate an API key (free plan is enough).
 - ☐ **Claude** — Pro or Max subscription on the account you'll use on the hub.
-- ☐ **Wallets** — official wallet app for each coin you may mine: Pearl now; Quantus if you approve it as the fallback (PeakMiner cannot mine Tari or Conflux, so those need a second miner before they are useful). Save each **receive address**. Seed phrases stay offline and are never typed into the rig or into Claude.
+- ☐ **Wallets** — official wallet app for each coin you may mine: Pearl and Quantus (the approved fallback). PeakMiner cannot mine Tari or Conflux, so those need a second miner before they are useful. Save each **receive address**. Seed phrases stay offline and are never typed into the rig or into Claude.
 - ☐ **Kryptex** — your Pearl wallet address is your pool login; nothing to create.
 
 ## 2. Phone
@@ -47,7 +47,7 @@ Install, in this order:
   - ☐ `RIG_WALLET_PRL` — Pearl receive address
   - ☐ `NTFY_TOPIC` — your topic
   - ☐ `RIG_HUB_TOKEN` — any long random string; **identical on every machine**
-  - ☐ `RIG_WALLET_XTM`, `RIG_WALLET_CFX` — fallback coins (can be added later; no address = no switch)
+  - ☐ `RIG_WALLET_QTC` — Quantus receive address (the approved fallback; no address = no switch)
   - ☐ `HEALTHCHECKS_URL` (optional)
 - ☐ Power settings: never sleep, never hibernate, lid close = do nothing, "restart automatically after power failure" in BIOS if available.
 - ☐ Windows Update: set active hours so it doesn't reboot mid-day; the agent auto-starts after any reboot regardless.

@@ -43,7 +43,7 @@ Guardrails that always apply:
 - **Anything beyond the clamps becomes a recommendation to Ashton**, not an action.
 - **Coins:** only `coins.<X>.auto_switch: true` with an installed miner backend may be switched to
   automatically. PeakMiner mines Pearl and Quantus only; Tari/Conflux are `miner: none` until a second
-  miner backend exists. Quantus needs Ashton's approval. A coin without a wallet secret can never be switched to.
+  miner backend exists. Quantus is approved as the fallback (2026-11-06). A coin without a wallet secret can never be switched to.
 - **Miner lifecycle** (start/stop/restart/pause/resume) is live whenever `miner.managed: true`, even in
   dry-run; GPU settings, coin switches, reboot/shutdown obey `safety.dry_run`.
 
