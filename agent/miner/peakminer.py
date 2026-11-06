@@ -21,7 +21,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from ..secrets import get_secret, set_secret_store, wallet_for
+from ..secrets import get_secret, set_secret_store
 from .base import UNIT_FACTORS, GpuMinerStats, MinerBackend, MinerStats, norm_bus
 
 log = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ class PeakMiner(MinerBackend):
         coin = self.coin_override or self.cfg.get("miner.coin", "PRL")
         cat = (self.cfg.get("coins", {}) or {}).get(coin, {})
         return {"coin": coin, "algo": cat.get("algo", self.cfg.get("miner.algo", "pearl")),
-                "pool": cat.get("pool", self.cfg.get("miner.pool")), "dev_fee_pct": cat.get("dev_fee_pct", 2.0)}
+                "pool": cat.get("pool"), "dev_fee_pct": cat.get("dev_fee_pct", 2.0)}
 
     def stats(self) -> MinerStats:
         coin = self.active_coin()["coin"]
@@ -185,15 +185,24 @@ class PeakMiner(MinerBackend):
             log.info("generated PEAKMINER_API_KEY (stored in %s)", where)
         return key
 
+    def worker_name(self) -> str:
+        worker = self.cfg.get("miner.worker") or os.environ.get("COMPUTERNAME") or self.cfg.host_name
+        return "".join(ch for ch in str(worker) if ch.isalnum() or ch in "-_")[:32] or "rig"
+
+    def pool_target(self):
+        from ..pool.resolve import resolve_pool
+        return resolve_pool(self.cfg, self.active_coin()["coin"], self.worker_name())
+
     def command(self) -> list[str]:
         ac = self.active_coin()
-        wallet = wallet_for(ac["coin"]) or "${WALLET_MISSING}"
-        worker = self.cfg.get("miner.worker") or os.environ.get("COMPUTERNAME") or self.cfg.host_name
-        worker = "".join(ch for ch in str(worker) if ch.isalnum() or ch in "-_")[:32] or "rig"
+        pt = self.pool_target()
+        if not pt.url:
+            raise RuntimeError(pt.note or f"no pool URL for {ac['coin']}")
+        login = pt.login or "${WALLET_MISSING}"
         port = int(self.cfg.get("miner.api_port", 4068))
         logs = self.cfg.data_dir / "logs"
         state = self.cfg.data_dir / "peakminer"
-        cmd = [str(self.exe), "--coin", ac["algo"], "-o", str(ac["pool"]), "-u", f"{wallet}.{worker}",
+        cmd = [str(self.exe), "--coin", ac["algo"], "-o", str(pt.url), "-u", login,
                "-a", f"127.0.0.1:{port}", "--state-dir", str(state),
                "--log-file", str(logs / "peakminer.log"), "--log-append", "--no-color", "--no-tips"]
         if self.control:

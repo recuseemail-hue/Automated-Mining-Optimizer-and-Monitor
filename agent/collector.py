@@ -117,6 +117,8 @@ class Collector:
                  "gpus_present": len(infos), "gpus_sampled": n_ok, "miner_uptime_s": mstats.uptime_s}
         if pool is not None:
             extra["pool_source"], extra["pool_verified"], extra["pool_ts"] = pool.source, pool.verified, pool.ts
+            extra["pool_provider"] = self.pool.name
+            extra["payout_coin"] = (pool.extra or {}).get("payout_coin") or getattr(self.pool, "payout_coin", None) or mstats.coin
         hcols = dict(cpu_c=hs.cpu_c, cpu_pct=hs.cpu_pct, cpu_w=hs.cpu_w, ram_used_mb=hs.ram_used_mb,
                      ram_total_mb=hs.ram_total_mb, gpu_w_total=total_gpu_w, wall_w=hs.wall_w,
                      miner_state=mstats.state, coin=mstats.coin or self.cfg.get("miner.coin"),

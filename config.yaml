@@ -64,10 +64,19 @@ miner:
   extra_args: []        # e.g. ["--devices", "0,1"]
 
 pool:
-  provider: kryptex
-  fee_pct: 1.0
-  # UNVERIFIED endpoints (docs unreachable from the build sandbox). Verify with `rigctl pool probe`
-  # on the rig and adjust url/fields. ${WALLET} is replaced with secret RIG_WALLET_<COIN>.
+  provider: unmineable         # unmineable (paid in pool.unmineable.payout_coin) | kryptex (paid in the mined coin)
+  fee_pct: 1.0                 # kryptex fee
+  unmineable:
+    payout_coin: BTC           # wallet = secret RIG_WALLET_BTC (e.g. your exchange BTC deposit address)
+    referral: ""               # optional unMineable referral code: fee drops from 1% to 0.75%
+    fee_pct: 1.0
+    fee_pct_referral: 0.75
+    urls:                      # stratum host per PeakMiner --coin name. UNVERIFIED: check unmineable.com
+      pearl: pearlpow.unmineable.com:3333   # (advanced mode -> PearlPoW) and `rigctl pool probe`
+    api_base: https://api.unminable.com/v4  # UNVERIFIED public stats API
+    fields: {balance: data.balance, payment_threshold: data.payment_threshold, uuid: data.uuid, workers_root: data}
+    verified: false
+  # Kryptex stats: UNVERIFIED endpoints. ${WALLET} is replaced with secret RIG_WALLET_<COIN>.
   stats_url: https://pool.kryptex.com/api/v1/miner/prl/${WALLET}
   fields:                      # dotted paths into the JSON response; null = not provided
     hashrate: hashrate
@@ -75,7 +84,7 @@ pool:
     balance: balance
     balance_usd: balance_usd
   cache_ttl_s: 600
-  verified: false              # set true once probe matches; until then values are logged as unverified
+  verified: false              # kryptex: set true once probe matches
 
 economics:
   kwh_usd: 0.0
@@ -89,7 +98,8 @@ coins:
   PRL:  {name: Pearl,   algo: pearl,   miner: peakminer, pool: prl.kryptex.network:7048, dev_fee_pct: 2.0, auto_switch: true,
          fork_sensitive: true}                # PIP-3 (FP8) would end RTX 30/40 mining; see selector.fork
   QTC:  {name: Quantus, algo: quantus, miner: peakminer, pool: "stratum+tcp://qtc.kryptex.network:7049", dev_fee_pct: 2.0,
-         auto_switch: true}                   # approved by the owner 2026-11-06 as the Pearl fallback (needs RIG_WALLET_QTC)
+         auto_switch: true}                   # approved 2026-11-06 as the Pearl fallback. Under unmineable it needs a
+                                              # pools.unmineable URL (none known yet); under kryptex it needs RIG_WALLET_QTC
   XTM:  {name: Tari C29, algo: cuckaroo29, miner: none, pool: xtm.kryptex.network:7033, dev_fee_pct: 0.0, auto_switch: true}
   CFX:  {name: Conflux, algo: octopus, miner: none, pool: cfx.kryptex.network:7030, dev_fee_pct: 0.0, auto_switch: true}
   IRON: {name: IronFish, algo: fishhash, miner: none, pool: iron.kryptex.network:7024, dev_fee_pct: 0.0, auto_switch: false}

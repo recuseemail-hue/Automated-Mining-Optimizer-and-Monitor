@@ -162,7 +162,7 @@
       const tile = (label, value, sub, cls = '') => h('div', { class: 'tile ' + cls }, h('div', { class: 'label' }, label), h('div', { class: 'value' }, value), sub ? h('div', { class: 'sub' }, sub) : null);
       const tiles = $('#tiles'); tiles.innerHTML = '';
       tiles.append(
-        tile('Balance', b.amount == null ? '—' : `${fmtNum(b.amount, 4)} ${b.coin || ''}`, b.usd != null ? fmtUSD(b.usd) + (b.source === 'cache' ? ' · cached' : '') : (b.source === 'unavailable' ? 'pool API unavailable' : b.verified === false ? 'pool API unverified' : '')),
+        tile('Balance', b.amount == null ? '—' : `${fmtNum(b.amount, b.coin === 'BTC' ? 6 : 4)} ${b.coin || ''}`, (b.usd != null ? fmtUSD(b.usd) : (b.source === 'unavailable' ? 'pool API unavailable' : b.verified === false ? 'pool API unverified' : '')) + (b.provider ? ' · ' + b.provider : '') + (b.source === 'cache' ? ' · cached' : '')),
         tile('Coin / algorithm', `${o.coin || '—'}`, o.algo || ''),
         tile('Total power', fmtW(o.total_power_w), o.total_hashrate && o.total_power_w ? fmtEff(o.total_hashrate, o.total_power_w) : ''),
         tile('Uptime', fmtDur(o.uptime_s), 'hub host'),

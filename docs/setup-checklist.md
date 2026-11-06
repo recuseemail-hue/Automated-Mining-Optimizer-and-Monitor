@@ -16,8 +16,8 @@ Legend: ☐ every host · ☐H hub only · ☐W worker only · ☐P phone
 - ☐ **healthchecks.io** (optional) — create a check "rig-overseer hub", period 10 min, grace 5 min. Copy the ping URL.
 - ☐ **hashrate.no** — create an account, generate an API key (free plan is enough).
 - ☐ **Claude** — Pro or Max subscription on the account you'll use on the hub.
-- ☐ **Wallets** — official wallet app for each coin you may mine: Pearl and Quantus (the approved fallback). PeakMiner cannot mine Tari or Conflux, so those need a second miner before they are useful. Save each **receive address**. Seed phrases stay offline and are never typed into the rig or into Claude.
-- ☐ **Kryptex** — your Pearl wallet address is your pool login; nothing to create.
+- ☐ **Payout address** — with unMineable (default) you are paid in one coin of your choice (`pool.unmineable.payout_coin`, default BTC) whatever you mine; the address can be your exchange deposit address (e.g. Kraken → Funding → Deposit → Bitcoin). Only with Kryptex do you need a wallet per mined coin (Pearl, Quantus). Seed phrases stay offline and are never typed into the rig or into Claude.
+- ☐ **unMineable** — no account needed; your payout address is your identity. Optional referral code → `pool.unmineable.referral` (fee 1 % → 0.75 %). In unMineable's web UI (advanced mode → PearlPoW) note the stratum host:port and confirm `pool.unmineable.urls.pearl` matches.
 
 ## 2. Phone
 
@@ -45,11 +45,12 @@ Install, in this order:
   - `miner.exe`: `C:\miners\peakminer\peakminer.exe`
   - workers only: `hub.url: http://<hub tailscale ip>:8080`
 - ☐ Secrets (`rigctl secret set NAME` prompts for the value and stores it in Windows Credential Manager):
-  - ☐ `RIG_WALLET_PRL` — Pearl receive address
+  - ☐ `RIG_WALLET_BTC` — payout address for unMineable (or `RIG_WALLET_PRL` if `pool.provider: kryptex`)
   - ☐ `NTFY_TOPIC` — your topic
   - ☐ `RIG_HUB_TOKEN` — any long random string; **identical on every machine**
-  - ☐ `RIG_WALLET_QTC` — Quantus receive address (the approved fallback; no address = no switch)
+  - ☐ `RIG_WALLET_QTC` — only with Kryptex: Quantus receive address (the approved fallback; no address = no switch)
   - ☐ `HEALTHCHECKS_URL` (optional)
+- ☐ Close the unMineable desktop app and any overclock tool (MSI Afterburner etc.) for good: the agent runs PeakMiner itself and owns the clocks; two controllers fight.
 - ☐ Power settings: never sleep, never hibernate, lid close = do nothing, "restart automatically after power failure" in BIOS if available.
 - ☐ Windows Update: set active hours so it doesn't reboot mid-day; the agent auto-starts after any reboot regardless.
 - ☐ `rigctl config --check` → must print `config OK`.
@@ -74,7 +75,7 @@ Install, in this order:
 - ☐H In `config.local.yaml`: `hub: {bind: <this machine's tailscale ip>}` (or keep `127.0.0.1` and run `tailscale serve --bg https+insecure://127.0.0.1:8080` for HTTPS).
 - ☐H `rigctl service install` again (adds the web service), then on the phone open `http://<hub tailscale ip>:8080` and log in.
 - ☐H `rigctl schedule install` → hourly check and daily coin check in Task Scheduler. `rigctl schedule show` lists them.
-- ☐H **verify** `rigctl pool probe` → paste JSON to Claude (balance / pool hashrate fields).
+- ☐H **verify** `rigctl pool probe` → paste JSON to Claude (unMineable balance / worker fields; Kryptex fields if that provider).
 - ☐H **verify** `rigctl coins probe` → paste JSON to Claude (hashrate.no fields). Then `rigctl coins table` should show live $/day.
 - ☐H **verify** `rigctl claude-run hourly --dry` prints the command; then `rigctl claude-run hourly` once by hand and check the Claude page of the dashboard shows the run.
 - ☐H healthchecks.io: the check should turn green within 10 min of the agent starting.
@@ -103,7 +104,7 @@ Install, in this order:
 ## Quick reference: secrets by machine
 | Secret | Hub | Worker |
 |---|---|---|
-| RIG_WALLET_PRL (+ XTM, CFX …) | ✓ | ✓ |
+| RIG_WALLET_BTC (unMineable payout) or RIG_WALLET_PRL/QTC (Kryptex) | ✓ | ✓ |
 | NTFY_TOPIC (+ NTFY_TOKEN) | ✓ | ✓ |
 | RIG_HUB_TOKEN (same value everywhere) | ✓ | ✓ |
 | HEALTHCHECKS_URL | ✓ | optional |

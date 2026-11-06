@@ -81,7 +81,8 @@ class Selector:
     def estimates(self, models: list[str], current_coin: str) -> tuple[list[CoinEstimate], dict]:
         src = self.s.get("source", {}) or {}
         provider = src.get("provider", "manual")
-        fee_pool = float(self.cfg.get("pool.fee_pct", 1.0)) / 100
+        from .pool.resolve import pool_fee_pct, resolve_pool
+        fee_pool = pool_fee_pct(self.cfg) / 100
         kwh = float(self.cfg.get("economics.kwh_usd", 0.0))
         now = self.clock()
         live: dict[str, dict] = {}
@@ -161,6 +162,8 @@ class Selector:
                 est = CoinEstimate(coin, model, hr, pw, gross, net, source, age)
                 if not self.miner_available(coin):
                     est.minable, est.note = False, f"no miner backend for {coin} (coins.{coin}.miner={cat.get('miner')})"
+                elif not resolve_pool(self.cfg, coin).url:
+                    est.minable, est.note = False, resolve_pool(self.cfg, coin).note
                 elif not self.minable(coin, model):
                     est.minable, est.note = False, "not minable on this model (Pearl FP8 fork)"
                 out.append(est)
@@ -189,8 +192,9 @@ class Selector:
         return str(self.catalog.get(coin, {}).get("miner", "")) in self.AVAILABLE_MINERS
 
     def minable(self, coin: str, model: str) -> bool:
+        from .pool.resolve import resolve_pool
         cat = self.catalog.get(coin, {})
-        if not self.miner_available(coin):
+        if not self.miner_available(coin) or not resolve_pool(self.cfg, coin).url:
             return False
         if not cat.get("fork_sensitive"):
             return True

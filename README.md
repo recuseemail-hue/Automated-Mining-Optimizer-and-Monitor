@@ -35,8 +35,8 @@ and prints `rigctl sensors` (what this host can read and control). Then:
    (`http://<hub-tailscale-ip>:8080`). Per-host overrides only; `config.yaml` holds the shared defaults.
 2. Secrets (never in the repo): `rigctl secret set <NAME>` stores in Windows Credential Manager, or
    `<data_dir>/secrets.env` (mode 600) on Linux.
-   - all hosts: `RIG_WALLET_PRL` (public address only), `NTFY_TOPIC` (long random string), `RIG_HUB_TOKEN`,
-     optional `NTFY_TOKEN`, `HEALTHCHECKS_URL`
+   - all hosts: `RIG_WALLET_BTC` (unMineable payout address; `RIG_WALLET_<COIN>` per mined coin if
+     `pool.provider: kryptex`), `NTFY_TOPIC` (long random string), `RIG_HUB_TOKEN`, optional `NTFY_TOKEN`, `HEALTHCHECKS_URL`
    - hub: `DASHBOARD_PASSWORD`, `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`)
    - fallback coins: `RIG_WALLET_XTM`, `RIG_WALLET_CFX` … (a coin without a wallet secret can never be switched to)
    - hub: `HASHRATE_NO_KEY` (hashrate.no API key; the daily coin check uses one cached call per GPU model)
@@ -103,6 +103,14 @@ Measured with the simulator: agent 28 MB RSS, web 51 MB, idle CPU < 1 %. A `clau
 hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_mb` (incidents are not).
 `rigctl footprint` prints the live numbers.
 
+## Pool and payout
+- `pool.provider: unmineable` (default): mine Pearl (or the fallback) and get paid in `pool.unmineable.payout_coin`
+  (BTC by default) to any address, e.g. an exchange deposit address. Login line is `BTC:<address>.<worker>`;
+  fee 1 % (0.75 % with a referral code). Balance and worker stats come from unMineable's v4 API, USD via CoinGecko.
+- `pool.provider: kryptex`: paid in the mined coin to `RIG_WALLET_<COIN>`.
+- A coin is only switchable when the active provider has a pool URL for it (`pool.unmineable.urls.<algo>` or
+  `coins.<C>.pools.<provider>`); otherwise it shows as "no pool URL" in `rigctl coins table`.
+
 ## Miner notes
 - PeakMiner v2.20.5 (closed source, 2 % dev fee) mines Pearl and Quantus; it does **not** mine Tari or Conflux,
   so those catalog entries are `miner: none` (listed, never switched to) until a second miner backend exists.
@@ -119,7 +127,8 @@ hundred MB while it runs; scheduled runs are skipped under `claude.min_free_ram_
 | Item | How to verify | Where to fix |
 |---|---|---|
 | PeakMiner (aligned with the official v2.20.5 README/API.md; not yet run live) | `rigctl miner dump`, `rigctl sensors --probe-write` (shows whether the miner's OC API path is available) | `agent/miner/peakminer.py`, `agent/gpu/router.py` |
-| Kryptex stats API endpoint and fields | `rigctl pool probe` | `pool.stats_url`, `pool.fields`, then `pool.verified: true` |
+| unMineable PearlPoW stratum host and v4 stats API fields | unMineable advanced page; `rigctl pool probe` | `pool.unmineable.urls`, `pool.unmineable.fields`, then `verified: true` |
+| Kryptex stats API endpoint and fields (if used) | `rigctl pool probe` | `pool.stats_url`, `pool.fields`, then `pool.verified: true` |
 | hashrate.no API (endpoint paths, auth, field names) | `rigctl secret set HASHRATE_NO_KEY`, then `rigctl coins probe` | `selector.hashrate_no.*`, then `verified: true` |
 | NVML fan / VF-offset writes on Windows GeForce | `rigctl sensors --probe-write` | if refused: fan stays on the driver curve; offsets via the miner's own flags (`miner.extra_args`) |
 | GDDR6X memory-junction temperature source | `rigctl gpus` → `memj` column | miner API or LibreHardwareMonitor (`sensors.lhm_url`) |

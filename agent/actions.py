@@ -388,9 +388,12 @@ class Actions:
                 self._rate("switch_coin", lim, 86400)
 
         def apply():
-            from .secrets import wallet_for
-            if not wallet_for(coin):
-                raise ActionError(f"no wallet secret RIG_WALLET_{coin.upper()} for {coin}")
+            from .pool.resolve import resolve_pool
+            pt = resolve_pool(self.cfg, coin)
+            if not pt.url:
+                raise ActionError(pt.note)
+            if not pt.login:
+                raise ActionError(f"no wallet secret {pt.wallet_secret} for {coin} (paid in {pt.payout_coin})")
             self.miner.stop()
             self.miner.coin_override = coin
             self.db.kv_set("miner.coin_override", coin)

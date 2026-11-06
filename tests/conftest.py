@@ -18,6 +18,7 @@ def cfg(tmp_path, monkeypatch):
         f"host: {{name: testrig, role: hub, data_dir: '{tmp_path.as_posix()}/data'}}\n"
         "gpu: {backend: sim, sim: {count: 2}}\n"
         "miner: {backend: sim}\n"
+        "pool: {provider: kryptex}\n"            # older tests assume coin-denominated payouts; unMineable tests opt in
         "gpus:\n  - {uuid: GPU-SIM-0000, control_enabled: true}\n",
         encoding="utf-8",
     )

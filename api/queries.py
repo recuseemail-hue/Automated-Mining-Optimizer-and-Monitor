@@ -77,7 +77,8 @@ def overview(db: Db) -> dict:
     bal = {"coin": None, "amount": None, "usd": None, "source": None, "ts": None}
     if hub and hub["sample"]:
         s = hub["sample"]
-        bal = {"coin": s.get("coin"), "amount": s.get("balance"), "usd": s.get("balance_usd"),
+        bal = {"coin": (s.get("extra") or {}).get("payout_coin") or s.get("coin"), "amount": s.get("balance"), "usd": s.get("balance_usd"),
+               "provider": (s.get("extra") or {}).get("pool_provider"),
                "source": (s.get("extra") or {}).get("pool_source"), "ts": (s.get("extra") or {}).get("pool_ts"),
                "verified": (s.get("extra") or {}).get("pool_verified")}
     incidents = [dict(r) for r in db.query("SELECT * FROM incidents WHERE status='open' ORDER BY opened DESC")]
