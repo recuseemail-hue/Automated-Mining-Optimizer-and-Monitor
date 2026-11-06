@@ -85,7 +85,8 @@ def test_coins_cache_cap_and_gpu_best(env):
     bad = HashrateNoSource(cfg, db, clock=clock, fetch=lambda url: {"title": "Unauthorized", "detail": "bad key"})
     coins, meta = bad.coins()
     assert coins == {} and "Unauthorized" in meta["error"]
-    probe = src.probe("NVIDIA GeForce RTX 3080")
+    src2 = HashrateNoSource(cfg, db, clock=clock, fetch=fake_fetch(calls))   # cap back to 90, fresh client
+    probe = src2.probe("NVIDIA GeForce RTX 3080")
     assert probe["coins_count"] == 3 and probe["gpu_best"]["key"] == "3080" and "PRL" in probe["catalog_coins"]
 
 
