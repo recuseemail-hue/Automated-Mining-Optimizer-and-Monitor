@@ -37,6 +37,7 @@ def test_secrets_file_store_and_redaction(cfg, tmp_path, monkeypatch):
     monkeypatch.delenv("NTFY_TOPIC", raising=False)
     where = sec.set_secret_store("NTFY_TOPIC", "topic-abcdef-123456")
     assert where == str(f) and (f.stat().st_mode & 0o777) == 0o600
+    assert sec.migrate_user_secrets(["NTFY_TOPIC"]) == []                   # nothing in a user vault on Linux
     assert sec.get_secret("NTFY_TOPIC") == "topic-abcdef-123456"
     sec.set_secret_store("NTFY_TOPIC", "topic-zzz-999999")
     assert f.read_text().count("NTFY_TOPIC=") == 1 and sec.get_secret("NTFY_TOPIC") == "topic-zzz-999999"

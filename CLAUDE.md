@@ -22,8 +22,8 @@ Guardrails that always apply:
 
 ## Safety rules (non-negotiable)
 - **Funds read-only.** Never request, store or log seed phrases or private keys. No withdrawals,
-  trades, transfers. Wallet addresses and tokens live in env vars / Credential Manager /
-  `<data_dir>/secrets.env` (`RIG_WALLET_<COIN>`, `NTFY_TOPIC`, `RIG_HUB_TOKEN`, `DASHBOARD_PASSWORD`,
+  trades, transfers. Wallet addresses and tokens live in env vars / `<data_dir>/secrets.env` (SYSTEM +
+  Administrators only; services run as SYSTEM, so a user's Credential Manager is not enough) (`RIG_WALLET_<COIN>`, `NTFY_TOPIC`, `RIG_HUB_TOKEN`, `DASHBOARD_PASSWORD`,
   `CLAUDE_CODE_OAUTH_TOKEN`, `HEALTHCHECKS_URL`), never in the repo or logs.
 - **Observe-only by default.** `safety.dry_run: true` globally and `gpus[].control_enabled: false`
   per GPU until Ashton flips them. The watchdog ladder acts in dry-run only with

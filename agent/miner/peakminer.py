@@ -160,9 +160,16 @@ class PeakMiner(MinerBackend):
     def stats(self) -> MinerStats:
         coin = self.active_coin()["coin"]
         try:
-            raw = self.fetch_raw()
+            code, body = self._req("GET", "/summary")
         except Exception as e:
             return MinerStats(state="unreachable", coin=coin, error=str(e)[:200])
+        if code == 401:
+            # the miner is up but our key does not match (or is unreadable): report it, never treat as down
+            return MinerStats(state="unauthorized", coin=coin, error="miner API key rejected: PEAKMINER_API_KEY differs from the "
+                                                                      "running miner's key (restart the miner from rigctl to re-sync)")
+        if code != 200:
+            return MinerStats(state="error", coin=coin, error=f"/summary {code}: {body}")
+        raw = body
         st = parse_summary(raw, self.unit, coin)
         if st.state == "running" and not st.gpus:
             st.state = "error"
@@ -198,7 +205,10 @@ class PeakMiner(MinerBackend):
         pt = self.pool_target()
         if not pt.url:
             raise RuntimeError(pt.note or f"no pool URL for {ac['coin']}")
-        login = pt.login or "${WALLET_MISSING}"
+        if not pt.login:
+            raise RuntimeError(f"refusing to start the miner without a payout address: secret {pt.wallet_secret} is not readable "
+                               f"by this process (services run as SYSTEM: run `rigctl secret migrate`)")
+        login = pt.login
         port = int(self.cfg.get("miner.api_port", 4068))
         logs = self.cfg.data_dir / "logs"
         state = self.cfg.data_dir / "peakminer"
@@ -235,6 +245,11 @@ class PeakMiner(MinerBackend):
             time.sleep(1)
             if self.health():
                 return
+
+    def restart(self) -> None:
+        self.command()               # raises before anything is stopped when the login cannot be built
+        self.stop()
+        self.start()
 
     def stop(self) -> None:
         if self._proc is not None and self._proc.poll() is None:

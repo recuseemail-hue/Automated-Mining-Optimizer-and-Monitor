@@ -64,8 +64,41 @@ def _cred_read(name: str) -> str | None:
         adv.CredFree(pcred)
 
 
-def set_secret_store(name: str, value: str) -> str:
-    """Store a secret: Credential Manager on Windows, else the secrets file (mode 600). Returns where."""
+def _lock_file_acl(path: Path) -> None:
+    """Windows: strip inheritance, grant only SYSTEM (S-1-5-18) and Administrators (S-1-5-32-544)."""
+    if os.name != "nt":
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return
+    import subprocess
+    subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", "*S-1-5-18:F", "*S-1-5-32-544:F"],
+                   capture_output=True, text=True)
+
+
+def set_secret_file(name: str, value: str) -> str:
+    """Machine-wide store: KEY=VALUE in the secrets file, readable by SYSTEM and Administrators only.
+    This is what the services (which run as SYSTEM) read."""
+    global _file_cache
+    if _file_path is None:
+        raise RuntimeError("secrets file path not configured")
+    lines = []
+    if _file_path.is_file():
+        lines = [ln for ln in _file_path.read_text(encoding="utf-8").splitlines() if not ln.startswith(name + "=")]
+    lines.append(f"{name}={value}")
+    _file_path.parent.mkdir(parents=True, exist_ok=True)
+    _file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _lock_file_acl(_file_path)
+    _file_cache = None
+    return str(_file_path)
+
+
+def set_secret_store(name: str, value: str, machine: bool = True) -> str:
+    """Store a secret. Default: the machine-wide secrets file (services run as SYSTEM and cannot read a
+    user's Credential Manager). machine=False: the current user's Credential Manager (Windows only)."""
+    if os.name != "nt" or machine:
+        return set_secret_file(name, value)
     if os.name == "nt":
         import ctypes
         from ctypes import wintypes
@@ -81,22 +114,19 @@ def set_secret_store(name: str, value: str) -> str:
                           ctypes.cast(buf, ctypes.c_void_p), 2, 0, None, None, "rig-overseer")
         if not ctypes.windll.advapi32.CredWriteW(ctypes.byref(cred), 0):
             raise OSError(f"CredWriteW failed ({ctypes.GetLastError()})")
-        return "Windows Credential Manager"
-    if _file_path is None:
-        raise RuntimeError("secrets file path not configured")
-    lines = []
-    if _file_path.is_file():
-        lines = [ln for ln in _file_path.read_text(encoding="utf-8").splitlines() if not ln.startswith(name + "=")]
-    lines.append(f"{name}={value}")
-    _file_path.parent.mkdir(parents=True, exist_ok=True)
-    _file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    try:
-        os.chmod(_file_path, 0o600)
-    except OSError:
-        pass
-    global _file_cache
-    _file_cache = None
-    return str(_file_path)
+        return "Windows Credential Manager (current user only; services cannot read it)"
+    raise RuntimeError("unreachable")
+
+
+def migrate_user_secrets(names: list[str]) -> list[str]:
+    """Copy secrets from the current user's Credential Manager into the machine-wide file."""
+    moved = []
+    for n in names:
+        v = _cred_read(n) if os.name == "nt" else None
+        if v and not _load_file().get(n):
+            set_secret_file(n, v)
+            moved.append(n)
+    return moved
 
 
 def get_secret(name: str, default: str | None = None) -> str | None:

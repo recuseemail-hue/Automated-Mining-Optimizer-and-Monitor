@@ -430,21 +430,33 @@ def cmd_footprint(args):
     print(f"total rig-overseer RSS: {tot:.0f} MB (budget ~1024 MB)")
 
 
+SECRET_NAMES = ["RIG_WALLET_PRL", "RIG_WALLET_QTC", "NTFY_TOPIC", "NTFY_TOKEN", "RIG_HUB_TOKEN", "DASHBOARD_PASSWORD",
+                "HASHRATE_NO_KEY", "PEAKMINER_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "HEALTHCHECKS_URL"]
+
+
 def cmd_secret(args):
     cfg = _ctx(args)
-    from .secrets import get_secret, set_secret_store
+    from .secrets import _load_file, get_secret, migrate_user_secrets, set_secret_store
+    payout = str(cfg.get("pool.unmineable.payout_coin", "BTC")).upper()
+    names = [f"RIG_WALLET_{payout}"] + [n for n in SECRET_NAMES if n != f"RIG_WALLET_{payout}"]
     if args.sub == "set":
         import getpass
         val = args.value or getpass.getpass(f"{args.name}: ")
-        print(f"{args.name} stored in {set_secret_store(args.name, val)}")
+        if not val:
+            raise SystemExit("empty value; nothing stored")
+        print(f"{args.name} stored in {set_secret_store(args.name, val, machine=not args.user)}")
+    elif args.sub == "migrate":
+        moved = migrate_user_secrets(names)
+        print(f"copied to {cfg.secrets_file}: {', '.join(moved) if moved else 'nothing new'}")
     else:
-        payout = str(cfg.get("pool.unmineable.payout_coin", "BTC")).upper()
-        names = [f"RIG_WALLET_{payout}", "RIG_WALLET_PRL", "RIG_WALLET_QTC", "NTFY_TOPIC", "NTFY_TOKEN", "RIG_HUB_TOKEN",
-                 "DASHBOARD_PASSWORD", "HASHRATE_NO_KEY", "PEAKMINER_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
-                 "HEALTHCHECKS_URL"]
+        in_file = _load_file()
         print(f"pool.provider={cfg.get('pool.provider')} payout={payout if cfg.get('pool.provider') == 'unmineable' else 'mined coin'}")
+        print(f"machine store: {cfg.secrets_file} (services read this one)")
         for n in names:
-            print(f"{n:24} {'set' if get_secret(n) else '-'}")
+            where = "machine" if in_file.get(n) else ("user-only" if get_secret(n) else "-")
+            print(f"{n:24} {where}")
+        if any(get_secret(n) and not in_file.get(n) for n in names):
+            print("! user-only secrets are invisible to the services: run `rigctl secret migrate`")
 
 
 def cmd_sys(args):
@@ -569,10 +581,11 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("sub", nargs="?", default="status", choices=["plan", "install", "uninstall", "status"])
     sv.set_defaults(fn=cmd_service)
     sub.add_parser("footprint", help="RSS/CPU of rig-overseer processes").set_defaults(fn=cmd_footprint)
-    se = sub.add_parser("secret", help="store a secret (Credential Manager on Windows, secrets file elsewhere) or list which are set")
-    se.add_argument("sub", choices=["set", "list"])
+    se = sub.add_parser("secret", help="store a secret in the machine store the services read; list; migrate from Credential Manager")
+    se.add_argument("sub", choices=["set", "list", "migrate"])
     se.add_argument("name", nargs="?")
     se.add_argument("value", nargs="?")
+    se.add_argument("--user", action="store_true", help="store in the current user's Credential Manager instead (not visible to services)")
     se.set_defaults(fn=cmd_secret)
     sy = sub.add_parser("sys", help="system-change helpers for incident runs: restore-point, log-change")
     sy.add_argument("sub", choices=["restore-point", "log-change"])

@@ -33,8 +33,8 @@ and prints `rigctl sensors` (what this host can read and control). Then:
 
 1. Edit `config.local.yaml`: `host.role` (`hub`/`worker`), `miner.exe`, and for workers `hub.url`
    (`http://<hub-tailscale-ip>:8080`). Per-host overrides only; `config.yaml` holds the shared defaults.
-2. Secrets (never in the repo): `rigctl secret set <NAME>` stores in Windows Credential Manager, or
-   `<data_dir>/secrets.env` (mode 600) on Linux.
+2. Secrets (never in the repo): `rigctl secret set <NAME>` writes `<data_dir>/secrets.env`, locked to
+   SYSTEM + Administrators on Windows (the services run as SYSTEM) and mode 600 on Linux.
    - all hosts: `RIG_WALLET_BTC` (unMineable payout address; `RIG_WALLET_<COIN>` per mined coin if
      `pool.provider: kryptex`), `NTFY_TOPIC` (long random string), `RIG_HUB_TOKEN`, optional `NTFY_TOKEN`, `HEALTHCHECKS_URL`
    - hub: `DASHBOARD_PASSWORD`, `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`)

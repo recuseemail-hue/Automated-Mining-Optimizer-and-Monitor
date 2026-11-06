@@ -44,7 +44,7 @@ Install, in this order:
   - `host.role`: `hub` on the one machine that will host the dashboard (the laptop for now), `worker` on every other.
   - `miner.exe`: `C:\miners\peakminer\peakminer.exe`
   - workers only: `hub.url: http://<hub tailscale ip>:8080`
-- ☐ Secrets (`rigctl secret set NAME` prompts for the value and stores it in Windows Credential Manager):
+- ☐ Secrets (`rigctl secret set NAME` prompts for the value and stores it in the machine store `C:\ProgramData\rig-overseer\secrets.env`, readable only by SYSTEM and Administrators — the services run as SYSTEM and cannot read a user's Credential Manager; `rigctl secret migrate` copies older Credential Manager entries over):
   - ☐ `RIG_WALLET_BTC` — payout address for unMineable (or `RIG_WALLET_PRL` if `pool.provider: kryptex`)
   - ☐ `NTFY_TOPIC` — your topic
   - ☐ `RIG_HUB_TOKEN` — any long random string; **identical on every machine**

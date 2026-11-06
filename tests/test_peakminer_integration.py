@@ -32,16 +32,34 @@ def pm(cfg, monkeypatch, tmp_path):
     return PeakMiner(cfg)
 
 
-def test_command_line_matches_docs(pm, cfg):
+def test_command_line_matches_docs(pm, cfg, monkeypatch):
     cmd = pm.command()
     assert cmd[1:7] == ["--coin", "pearl", "-o", "prl.kryptex.network:7048", "-u", "prl1wallet.Rig1"]
     assert "-a" in cmd and cmd[cmd.index("-a") + 1] == "127.0.0.1:4068"
     assert cmd[cmd.index("--api-key") + 1] == "k-123456" and cmd[cmd.index("--api-control") + 1] == "pause,oc"
     assert cmd[cmd.index("--gpu-temp-stop") + 1] == "85" and cmd[cmd.index("--gpu-temp-start") + 1] == "72"
     assert "--log-append" in cmd and "--no-color" in cmd and "--state-dir" in cmd
+    monkeypatch.setenv("RIG_WALLET_QTC", "qzwallet")
     pm.coin_override = "QTC"
     cmd = pm.command()
     assert cmd[cmd.index("--coin") + 1] == "quantus" and "qtc.kryptex.network:7049" in cmd[cmd.index("-o") + 1]
+    assert cmd[cmd.index("-u") + 1] == "qzwallet.Rig1"
+
+
+def test_restart_refuses_without_wallet_and_401_is_not_down(cfg, monkeypatch, tmp_path):
+    monkeypatch.delenv("RIG_WALLET_PRL", raising=False)
+    monkeypatch.delenv("RIG_WALLET_BTC", raising=False)
+    monkeypatch.setenv("PEAKMINER_API_KEY", "k")
+    cfg.data["miner"]["exe"] = str(tmp_path / "peakminer.exe")
+    p = PeakMiner(cfg)
+    stopped = []
+    p.stop = lambda: stopped.append(1)
+    with pytest.raises(RuntimeError, match="payout address"):
+        p.restart()
+    assert stopped == []                                                 # a healthy miner is never killed first
+    p._req = lambda method, path, body=None, timeout=None: (401, {"error": "unauthorized"})
+    st = p.stats()
+    assert st.state == "unauthorized" and "key" in st.error
 
 
 def test_api_key_generated_when_missing(cfg, monkeypatch, tmp_path):
@@ -51,7 +69,7 @@ def test_api_key_generated_when_missing(cfg, monkeypatch, tmp_path):
     monkeypatch.setenv("RIG_WALLET_PRL", "w")
     p = PeakMiner(cfg)
     key = p.api_key()
-    assert len(key) > 20 and (tmp_path / "secrets.env").read_text().startswith("PEAKMINER_API_KEY=")
+    assert len(key) > 20 and "PEAKMINER_API_KEY=" in (tmp_path / "secrets.env").read_text()
 
 
 def test_stats_pause_and_oc_via_control_api(pm):
