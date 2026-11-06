@@ -468,6 +468,14 @@ def cmd_sys(args):
         print(sysadmin.log_change(cfg, args.who, args.desc, args.undo or "see change description"))
 
 
+def cmd_notify(args):
+    cfg = _ctx(args)
+    from .notify import Notifier
+    n = Notifier(cfg, Db(cfg.db_path))
+    ok = n.push(f"{cfg.host_name}: test", args.message or "rig-overseer notification test", priority="default", tags="white_check_mark")
+    print("sent" if ok else "not delivered now (queued or suppressed); check NTFY_TOPIC and the phone subscription")
+
+
 def cmd_incidents(args):
     cfg = _ctx(args)
     db = Db(cfg.db_path)
@@ -593,6 +601,10 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--undo")
     sy.add_argument("--who", default="claude")
     sy.set_defaults(fn=cmd_sys)
+    nt = sub.add_parser("notify", help="send a test push notification")
+    nt.add_argument("sub", nargs="?", default="test", choices=["test"])
+    nt.add_argument("--message")
+    nt.set_defaults(fn=cmd_notify)
     inc = sub.add_parser("incidents", help="recent incidents")
     inc.add_argument("--limit", type=int, default=20)
     inc.set_defaults(fn=cmd_incidents)

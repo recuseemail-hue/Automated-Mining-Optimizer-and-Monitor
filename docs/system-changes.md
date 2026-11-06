@@ -13,3 +13,5 @@ Format: `YYYY-MM-DD HH:MM host | who (user/claude/rule) | change | undo`
 | 2026-11-06 | rig1 | user | NVIDIA Studio driver 621.14 (clean install) | Device Manager → Display adapters → Roll Back Driver |
 | 2026-11-06 | rig1 | user | PowerShell execution policy CurrentUser=RemoteSigned (needed for install.ps1) | Set-ExecutionPolicy -Scope CurrentUser Undefined |
 | 2026-11-06 | rig1 | user | Installed Python 3.12, Git, Tailscale (IP 100.97.182.90), Claude Code via winget | winget uninstall each id |
+| 2026-11-06 | rig1 | user | Task Scheduler tasks: rig-overseer agent, rig-overseer web (boot, SYSTEM), rig-overseer hourly, rig-overseer algo_check | rigctl service uninstall; schtasks /Delete /TN "rig-overseer hourly" and "rig-overseer algo_check" |
+| 2026-11-06 | rig1 | user | PeakMiner managed by the agent; secrets moved to C:\ProgramData\rig-overseer\secrets.env (SYSTEM+Admins ACL) | delete the file; re-enter secrets |
