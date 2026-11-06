@@ -51,8 +51,10 @@ class Tuner:
         prof, base = self.baseline_for(gid)
         triggers: list[str] = []
         if cur.n == 0:
+            ext = self.cfg.gpu_external_oc(uuid)
             return {"uuid": uuid, "idx": g["idx"], "model": g["model"], "candidate": False, "reason": "no samples in the last hour",
-                    "triggers": [], "current": cur.as_dict()}
+                    "triggers": [], "current": cur.as_dict(),
+                    "excluded": [f"clocks owned by external controller ({ext}); tool never tunes it"] if ext else []}
         over_c = float(self.h.get("trigger_temp_over_c", 0))
         if cur.core_max is not None and cur.core_max > t.get("core_c_max", 75) + over_c:
             triggers.append(f"core {cur.core_max:.0f}C > target {t.get('core_c_max')}C")
@@ -77,6 +79,8 @@ class Tuner:
         excl: list[str] = []
         if not self.cfg.gpu_control_enabled(uuid):
             excl.append("control_enabled=false")
+        if self.cfg.gpu_external_oc(uuid):
+            excl.append(f"clocks owned by external controller ({self.cfg.gpu_external_oc(uuid)}); tool never tunes it")
         conv = self.db.profile(gid, "converged")
         if conv and conv.get("converged_until") and conv["converged_until"] > now and not triggers:
             excl.append(f"converged until {time.strftime('%Y-%m-%d', time.localtime(conv['converged_until']))}")

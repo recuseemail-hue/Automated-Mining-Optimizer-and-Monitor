@@ -29,3 +29,18 @@ Takeaways
 Miner comparison (same card, stock, pearlhash, 2026-11-06): SRBMiner-MULTI via the unMineable app reported
 ~133 TH/s (567/3 shares) where PeakMiner 2.20.5 reported ~125 TH/s. Re-check over 24 h on the dashboard before
 concluding; if it holds, a managed SRBMiner backend is worth building (task: SRBMiner-MULTI backend).
+
+## 2026-11-06 — MSI Afterburner profile (owner-applied, external controller)
+Afterburner 4.6.6 (profile slots 1 and 5): power limit 105 % (400 W), core offset **+125 MHz**, memory +0,
+fans fixed 80 % (set via NVML; resets on reboot — NVML fan writes confirmed working on this driver).
+Result with SRBMiner on pearlhash: **~133.7 TH/s @ ~394 W**, core 2010 MHz, core 64 °C, hot spot 78 °C,
+memory junction 70 °C, 0 errors. Sweep: +150 clean for 90 s (not soak-tested), **+175 → nvlddmkm event 153
+driver resets**. Fallback if instability appears: +100. Clamp for this card set to +150; strategy B stops at +125.
+
+While Afterburner owns the clocks the GPU carries `external_oc: afterburner`: the hourly tuner and
+`/optimize` refuse it; only watchdog emergency actions touch it. Remove the flag (and close Afterburner)
+to hand tuning back to the tool.
+
+unMiner runs SRBMiner with `--disable-worker-watchdog`: after a driver reset it stays up at 0 H/s. The
+watchdog treats "alive + 0 H/s for 10 min" as a failure and kills it so the app relaunches it
+(`miner.kill_stalled_external`).

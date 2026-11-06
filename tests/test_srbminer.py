@@ -95,3 +95,58 @@ def test_unmineable_alias_login(cfg, monkeypatch):
     assert t.login == "Killrang.rig1" and t.url == "pearlpow.unmineable.com:3333"
     cfg.data["pool"]["unmineable"]["referral"] = "ab12"
     assert resolve_pool(cfg, "PRL", "rig1").login == "Killrang.rig1#ab12"
+
+
+def test_external_oc_blocks_tuning_but_not_emergencies(cfg, db):
+    from agent import service
+    from agent.optimizer import Optimizer
+    from agent.tuner import Tuner
+    cfg.data["safety"]["dry_run"] = False
+    cfg.data["gpus"][0]["external_oc"] = "afterburner"
+    st = service.build(cfg)
+    st["collector"].register_gpus()
+    a = st["actions"]
+    r = a.set_core_offset("GPU-SIM-0000", 30, "claude", "tune")
+    assert not r.ok and "afterburner" in r.error
+    r = a.set_power_limit("GPU-SIM-0000", 187, "rule", "overtemp", emergency=True)
+    assert r.ok and not r.dry_run                                        # emergencies still act
+    rep = Optimizer(cfg, db, a, st["trials"], st["collector"]).run(["GPU-SIM-0000"], "max-hashrate")[0]
+    assert rep.outcome == "refused" and "afterburner" in rep.note
+    e = Tuner(cfg, db, a).evaluate("GPU-SIM-0000", "PRL")
+    assert any("external controller" in x for x in e.get("excluded", []))
+
+
+def test_stalled_external_miner_is_kicked(cfg, db, monkeypatch):
+    """unmanaged SRBMiner alive at 0 H/s for zero_hashrate_s -> killed so the launcher relaunches it."""
+    from agent import service
+    cfg.data["miner"]["managed"] = False
+    cfg.data["miner"]["backend"] = "auto"
+    cfg.data["safety"]["dry_run"] = True
+    cfg.data["notify"]["provider"] = "none"
+    calls = []
+
+    class Clock:
+        t = 1_800_000_000.0
+
+        def __call__(self):
+            return Clock.t
+    clock = Clock()
+    st = service.build(cfg, clock=clock)
+    srb = st["miner"].srb
+    stalled = {"hr": 0.0}
+    monkeypatch.setattr(type(srb), "process", lambda self: FakeProc(["SRBMiner-MULTI.exe", "--api-port", "60130"]))
+    monkeypatch.setattr(type(srb), "fetch_raw", lambda self: {**RAW, "algorithms": [{**RAW["algorithms"][0], "hashrate": {"gpu": {"total": stalled["hr"], "gpu0": stalled["hr"]}}}]})
+    monkeypatch.setattr(type(srb), "restart", lambda self: calls.append("kill"))
+    monkeypatch.setattr(type(st["miner"].peak), "stats", lambda self: MinerStats(state="unreachable", coin="PRL"))
+    st["collector"].register_gpus()
+    for _ in range(45):                                                  # ~11 min
+        st["watchdog"].tick()
+        Clock.t += 15
+    assert calls == ["kill"]
+    stalled["hr"] = 125e12
+    calls.clear()
+    Clock.t += 600
+    for _ in range(45):
+        st["watchdog"].tick()
+        Clock.t += 15
+    assert calls == []                                                   # healthy: left alone

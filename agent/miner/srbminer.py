@@ -150,6 +150,17 @@ class SRBMiner(MinerBackend):
             if (p.info["name"] or "").lower().startswith("srbminer"):
                 p.terminate()
 
+    def restart(self) -> None:
+        """Kill a stalled SRBMiner (alive at 0 H/s after a driver reset) and let its launcher relaunch it."""
+        import time as _t
+        self.stop()
+        self._port = None
+        for _ in range(int(self.cfg.get("miner.srbminer.relaunch_wait_s", 90)) // 3):
+            _t.sleep(3)
+            if self.process() is not None:
+                return
+        raise RuntimeError("SRBMiner did not come back after being stopped; the launcher (unMineable app) may be closed")
+
     def pause_gpu(self, index: int) -> None:
         raise NotImplementedError("srbminer backend has no pause API")
 
@@ -207,6 +218,9 @@ class AutoMiner(MinerBackend):
             self.srb.stop()
 
     def restart(self) -> None:
+        if self.current is self.srb:
+            self.srb.restart()
+            return
         self.peak.restart()
 
     def fetch_raw(self):

@@ -18,11 +18,14 @@ def _tail(path: Path, lines: int = 80) -> str:
         return ""
 
 
-def gpu_table(db, host_id: int) -> list[dict]:
+def gpu_table(db, host_id: int, cfg: Config | None = None) -> list[dict]:
+    from .config import load_config
+    cfg = cfg or load_config()
     out = []
     for g in db.gpus_for_host(host_id):
         s = db.one("SELECT * FROM gpu_samples WHERE gpu_id=? ORDER BY ts DESC LIMIT 1", (g["id"],))
         out.append({"uuid": g["uuid"], "idx": g["idx"], "model": g["model"], "control_enabled": bool(g["control_enabled"]),
+                    "external_oc": cfg.gpu_external_oc(g["uuid"]), "external_profile": cfg.gpu_entry(g["uuid"]).get("external_profile"),
                     "stock_pl_w": g["stock_pl_w"], "latest": {k: s[k] for k in ("ts", "power_w", "core_c", "memj_c", "fan_pct", "pl_w",
                                                                                  "core_mhz", "mem_mhz", "core_offset_mhz", "mem_offset_mhz",
                                                                                  "hashrate", "accepted", "rejected", "throttle")} if s else None})
@@ -40,7 +43,7 @@ def build_context(cfg: Config, st: dict, task: str, *, incident_id: int | None =
     if task == "hourly":
         from .tuner import Tuner
         pre = Tuner(cfg, db, st["actions"]).precheck(coin)
-        return {**base, **pre, "gpu_table": gpu_table(db, col.host_id)}
+        return {**base, **pre, "gpu_table": gpu_table(db, col.host_id, cfg)}
     if task == "algo_check":
         from .selector import Selector
         sel = Selector(cfg, db)
@@ -77,5 +80,5 @@ def build_context(cfg: Config, st: dict, task: str, *, incident_id: int | None =
                                                              "FROM actions WHERE ts>=? ORDER BY id", (since,))],
                 "miner": st["miner"].stats().__dict__ | {"raw": None, "gpus": None},
                 "logs": {"agent": _tail(logs / "agent.log"), "miner": _tail(logs / "peakminer.log")},
-                "gpu_table": gpu_table(db, col.host_id), "system_changes_doc": "docs/system-changes.md"}
+                "gpu_table": gpu_table(db, col.host_id, cfg), "system_changes_doc": "docs/system-changes.md"}
     raise ValueError(task)

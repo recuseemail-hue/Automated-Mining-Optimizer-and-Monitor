@@ -169,6 +169,9 @@ class Optimizer:
         if gid is None or not self.cfg.gpu_control_enabled(uuid):
             rep.outcome, rep.note = "refused", "control_enabled=false"
             return rep
+        if self.cfg.gpu_external_oc(uuid):
+            rep.outcome, rep.note = "refused", f"clocks owned by {self.cfg.gpu_external_oc(uuid)}; remove gpus[].external_oc to let the tool tune"
+            return rep
         wd = self.db.kv_get("watchdog.state") or {}
         if (wd.get("ladder") or {}).get(uuid) or self.db.incident_open_for("overtemp", gid):
             rep.outcome, rep.note = "refused", "GPU is under watchdog protection or has an open incident"

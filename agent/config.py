@@ -104,6 +104,11 @@ class Config:
                 return g
         return {}
 
+    def gpu_external_oc(self, uuid: str) -> str | None:
+        """Name of an external overclock controller (e.g. 'afterburner') that owns this GPU's clocks, or None."""
+        v = self.gpu_entry(uuid).get("external_oc")
+        return (str(v) if v not in (None, False, "") else None)
+
     def gpu_control_enabled(self, uuid: str) -> bool:
         return bool(self.gpu_entry(uuid).get("control_enabled", False))
 

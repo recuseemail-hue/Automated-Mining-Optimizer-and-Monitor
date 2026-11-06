@@ -231,13 +231,17 @@ class Watchdog:
         down = mstats.state in ("stopped", "unreachable", "error") or (mstats.state == "running" and (hr or 0) <= 0)
         protected = any(st.ladder >= 2 for u, st in self.gpus.items() if u != "__host__")
         if not self.cfg.get("miner.managed", True):
-            down = False                       # someone else runs the miner: observe, never restart
+            # someone else runs the miner: never start it, but a process that is alive at 0 H/s (driver reset
+            # with the miner's own watchdog disabled) is kicked so its launcher relaunches it
+            down = bool(self.cfg.get("miner.kill_stalled_external", True)) and mstats.state == "running" and (hr or 0) <= 0
         if down and not protected:
             self.miner_down_since = self.miner_down_since or now
             # a miner that dies again soon after a rule restart is crash-looping: retry fast so the
             # restart cap (limits.miner_restarts_per_30min) is what ends it, not a 10-minute wait each time
             looping = now - self.last_restart_ts < float(self.w.get("crash_loop_window_s", 900))
             wait = float(self.w.get("crash_loop_retry_s", 60)) if looping else float(self.w.get("zero_hashrate_s", 600))
+            if not self.cfg.get("miner.managed", True):
+                wait = float(self.w.get("zero_hashrate_s", 600))   # an external launcher needs time to relaunch: no fast retries
             if now - self.miner_down_since >= wait:
                 r = self.actions.miner_restart("rule", f"miner {mstats.state}, hashrate {hr} for {wait:.0f}s", emergency=True)
                 self.miner_down_since = now

@@ -41,6 +41,9 @@ Guardrails that always apply:
   go to 2×). The 5-minute logger and the 15-second watchdog never call an LLM. Low free RAM skips
   scheduled runs, never incident runs. `claude.hourly_gating` skips the call when there is no candidate.
 - **Anything beyond the clamps becomes a recommendation to Ashton**, not an action.
+- **External clock controllers.** A GPU with `gpus[].external_oc` (rig1 GPU0: MSI Afterburner, +125 core /
+  400 W / fan 80 %) is never tuned by the tool; only watchdog emergencies may change it. Never set clocks
+  from two tools at once.
 - **Coins:** only `coins.<X>.auto_switch: true` with an installed miner backend may be switched to
   automatically. PeakMiner mines Pearl and Quantus only; Tari/Conflux are `miner: none` until a second
   miner backend exists. Quantus is approved as the fallback (2026-11-06). A coin without a wallet secret can never be switched to.

@@ -180,5 +180,5 @@ def test_mem_lock_knob_and_3080_strategies(cfg, db):
     steps = opt.strategy_steps("GPU-SIM-0000")
     assert steps["A"][0]["mem_lock_mhz"] is None and steps["B"][0]["core_offset_mhz"] == 0
     c3080 = cfg.clamps_for("NVIDIA GeForce RTX 3080")["optimize_strategies"]
-    assert c3080["A"]["mem_lock_mhz"] == 5001 and c3080["B"]["core_offset_mhz"] == [75, 100, 125, 150]
+    assert c3080["A"]["mem_lock_mhz"] == 5001 and c3080["B"]["core_offset_mhz"] == [75, 100, 125]
     assert cfg.get("optimize.default_goal") == "max-hashrate"

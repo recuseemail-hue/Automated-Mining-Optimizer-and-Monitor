@@ -53,8 +53,10 @@ miner:
   backend: auto         # auto (PeakMiner when it answers, else read-only SRBMiner started by the unMineable app) | peakminer | srbminer | sim
   srbminer:
     api_port: 21550     # fallback only: the port is read from the running SRBMiner command line
+    relaunch_wait_s: 90 # after killing a stalled SRBMiner, how long to wait for the launcher to bring it back
   exe: C:\miners\peakminer\peakminer.exe
   managed: true         # the agent starts/stops/restarts the miner (do not also run start.bat by hand)
+  kill_stalled_external: true   # unmanaged miner alive at 0 H/s for watchdog.zero_hashrate_s -> kill it so its launcher relaunches
   api_port: 4068        # bound to 127.0.0.1; key in secret PEAKMINER_API_KEY (generated on first start)
   api_control: [pause, oc]   # PeakMiner >= 2.20: per-GPU pause/resume and in-place OC writes via its API
   api_timeout_s: 3
@@ -183,9 +185,10 @@ clamps:
       mem_offset_mhz: [-500, 1200]
       # Measured on the EVGA FTW3 Ultra, pearlhash (docs/tuning-notes.md): core-bound; memory lock 5001
       # costs ~2.7 % hashrate and saves ~46 W. Stock 380 W = ~125 TH/s @ 377 W, 72 C.
+      core_offset_mhz: [-300, 150]  # +175 caused nvlddmkm driver resets on rig1 (2026-11-06); +125 ran clean
       optimize_strategies:
         A: {pl_pct: 100, core_lock_mhz: [1800, 1700, 1600, 1400], mem_lock_mhz: 5001, mem_offset_mhz: 0}   # efficiency
-        B: {pl_pct: 100, core_offset_mhz: [75, 100, 125, 150], mem_offset_mhz: 0}                           # max hashrate
+        B: {pl_pct: 100, core_offset_mhz: [75, 100, 125], mem_offset_mhz: 0}                                # max hashrate
         C: {pl_pct: 100, core_lock_mhz: [1875, 1850, 1800], mem_lock_mhz: 5001, mem_offset_mhz: 0}          # cool/balanced
 
 limits:
@@ -263,10 +266,12 @@ optimize:                        # rigctl optimize / the /optimize slash command
       pl_pct: [80, 75, 70, 65]
       mem_offset_mhz: 200
 
-gpus: []                         # per-GPU: {uuid, name, control_enabled, targets: {...}}
+gpus: []                         # per-GPU: {uuid, name, control_enabled, external_oc, external_profile, targets: {...}}
 #  - uuid: GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 #    name: "3080 FTW3 #1"
 #    control_enabled: false
+#    external_oc: afterburner   # another tool owns the clocks: tuner/optimizer never touch this GPU (emergencies still act)
+#    external_profile: {pl_w: 400, core_offset_mhz: 125, mem_offset_mhz: 0, fan_pct: 80}   # for the dashboard/context only
 
 logging:
   level: INFO

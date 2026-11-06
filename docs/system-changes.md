@@ -16,3 +16,4 @@ Format: `YYYY-MM-DD HH:MM host | who (user/claude/rule) | change | undo`
 | 2026-11-06 | rig1 | user | Task Scheduler tasks: rig-overseer agent, rig-overseer web (boot, SYSTEM), rig-overseer hourly, rig-overseer algo_check | rigctl service uninstall; schtasks /Delete /TN "rig-overseer hourly" and "rig-overseer algo_check" |
 | 2026-11-06 | rig1 | user | PeakMiner managed by the agent; secrets moved to C:\ProgramData\rig-overseer\secrets.env (SYSTEM+Admins ACL) | delete the file; re-enter secrets |
 | 2026-11-06 | rig1 | user | Miner handed back to the unMiner app temporarily (miner.managed: false); PeakMiner stopped | set managed: true, close unMiner, rigctl act miner-start |
+| 2026-11-06 | rig1 | user | MSI Afterburner 4.6.6 installed; profile PL 105% / core +125 / mem +0 / fan 80% applied (slots 1, 5) | Afterburner → Reset, or uninstall; fans return to auto on reboot |

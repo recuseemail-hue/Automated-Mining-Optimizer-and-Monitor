@@ -102,7 +102,12 @@ class Actions:
         if action in self.LIFECYCLE:
             if self.cfg.get("miner.managed", True):
                 return False, None
+            if action in ("miner_restart", "miner_resume_gpu") and self.cfg.get("miner.kill_stalled_external", True) \
+                    and getattr(getattr(self.miner, "current", None), "name", "") == "srbminer":
+                return False, None             # kick a stalled externally-run miner so its launcher relaunches it
             return True, "miner.managed=false: the agent does not start the miner"
+        if uuid is not None and self.cfg.gpu_external_oc(uuid) and not emergency:
+            return True, f"clocks owned by {self.cfg.gpu_external_oc(uuid)}: tuning writes refused (emergency actions still allowed)"
         if uuid is not None and not self.cfg.gpu_control_enabled(uuid):
             return True, "control_enabled=false for this GPU"
         if self.cfg.dry_run and not (emergency and self.cfg.get("safety.emergency_override_dry_run", False)):
