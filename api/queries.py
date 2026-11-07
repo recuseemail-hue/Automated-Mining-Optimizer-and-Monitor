@@ -105,19 +105,21 @@ def overview(db: Db) -> dict:
 
 def series(db: Db, gpu_id: int, hours: float, res: str = "5m") -> dict[str, list]:
     since = time.time() - hours * 3600
+    hs = "json_extract(extra, '$.hotspot_c')"
     if hours <= 48:
-        rows = db.query(f"SELECT {','.join(RES_COLS)} FROM gpu_samples WHERE gpu_id=? AND res=? AND ts>=? ORDER BY ts",
+        rows = db.query(f"SELECT {','.join(RES_COLS)}, {hs} hotspot_c FROM gpu_samples WHERE gpu_id=? AND res=? AND ts>=? ORDER BY ts",
                         (gpu_id, res, since))
     else:
         bucket = 3600 if hours <= 24 * 14 else 6 * 3600
         aggs = ", ".join(f"AVG({c}) {c}" for c in RES_COLS if c not in ("ts", "accepted", "rejected"))
-        rows = db.query(f"SELECT CAST(ts/{bucket} AS INT)*{bucket} ts, {aggs}, MAX(accepted) accepted, MAX(rejected) rejected "
-                        f"FROM gpu_samples WHERE gpu_id=? AND res='5m' AND ts>=? GROUP BY 1 ORDER BY 1", (gpu_id, since))
+        rows = db.query(f"SELECT CAST(ts/{bucket} AS INT)*{bucket} ts, {aggs}, MAX(accepted) accepted, MAX(rejected) rejected, "
+                        f"AVG({hs}) hotspot_c FROM gpu_samples WHERE gpu_id=? AND res='5m' AND ts>=? GROUP BY 1 ORDER BY 1", (gpu_id, since))
     cols = {c: [] for c in RES_COLS}
-    cols["eff"] = []
+    cols["eff"], cols["hotspot_c"] = [], []
     for r in rows:
         for c in RES_COLS:
             cols[c].append(r[c])
+        cols["hotspot_c"].append(r["hotspot_c"])
         hr, pw = r["hashrate"], r["power_w"]
         cols["eff"].append((hr / pw) if (hr and pw) else None)
     return cols

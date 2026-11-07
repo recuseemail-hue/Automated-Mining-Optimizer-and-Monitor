@@ -195,9 +195,13 @@ class Watchdog:
             else:
                 st.since.pop("hard_temp", None)
 
-            over = (s.core_c is not None and s.core_c >= core_crit) or (s.memj_c is not None and s.memj_c >= memj_crit)
+            hot = s.extra.get("hotspot_c")
+            hot_crit = float(self.w.get("hotspot_c_crit", 100))
+            over = (s.core_c is not None and s.core_c >= core_crit) or (s.memj_c is not None and s.memj_c >= memj_crit) \
+                or (hot is not None and hot >= hot_crit)
             if self._sustained(st, "overtemp", over, sustain):
-                self.escalate(info.uuid, "overtemp", f"core {s.core_c:.0f}C memj {s.memj_c and round(s.memj_c)} for {sustain:.0f}s")
+                self.escalate(info.uuid, "overtemp", f"core {s.core_c:.0f}C memj {s.memj_c and round(s.memj_c)} "
+                                                     f"hotspot {hot and round(hot)} for {sustain:.0f}s")
 
             loaded = (s.util_pct or 0) >= float(self.w.get("fan_fail_util_pct", 50))
             fan_dead = loaded and ((s.fan_rpm is not None and s.fan_rpm <= 0) or

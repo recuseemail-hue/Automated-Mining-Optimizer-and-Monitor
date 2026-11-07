@@ -30,6 +30,11 @@ class Tuner:
             rows = self.db.query("SELECT * FROM gpu_samples WHERE gpu_id=? AND ts>=? ORDER BY ts", (gpu_id, now - 3600))
         return window_stats(rows)
 
+    def _hotspot_max(self, gpu_id: int) -> float | None:
+        row = self.db.one("SELECT MAX(json_extract(extra, '$.hotspot_c')) m FROM gpu_samples WHERE gpu_id=? AND ts>=?",
+                          (gpu_id, self.clock() - 3600))
+        return float(row["m"]) if row and row["m"] is not None else None
+
     def baseline_for(self, gpu_id: int) -> tuple[dict | None, Window | None]:
         """The saved profile's score window is the baseline; falls back to the prior 24 h of 5 m rows."""
         for st in ("converged", "active", "known_good"):
@@ -60,6 +65,9 @@ class Tuner:
             triggers.append(f"core {cur.core_max:.0f}C > target {t.get('core_c_max')}C")
         if cur.memj_max is not None and cur.memj_max > t.get("memj_c_max", 100) + over_c:
             triggers.append(f"memj {cur.memj_max:.0f}C > target {t.get('memj_c_max')}C")
+        hot_max = self._hotspot_max(gid)
+        if hot_max is not None and hot_max > t.get("hotspot_c_max", 90) + over_c:
+            triggers.append(f"hot spot {hot_max:.0f}C > target {t.get('hotspot_c_max')}C")
         if base and base.hashrate and cur.hashrate is not None:
             drop = (base.hashrate - cur.hashrate) / base.hashrate * 100
             if drop > float(self.h.get("trigger_hashrate_drop_pct", 5)):

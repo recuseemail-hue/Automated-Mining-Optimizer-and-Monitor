@@ -67,7 +67,8 @@
       badges.length ? h('div', { class: 'badges', style: 'justify-content:flex-start;margin-bottom:6px' }, badges) : null,
       h('div', { class: 'kv' },
         kv('hashrate', fmtHR(s.hashrate)), kv('power', fmtW(s.power_w) + (s.pl_w ? ' / ' + Math.round(s.pl_w) : '')), kv('efficiency', fmtEff(s.hashrate, s.power_w)),
-        kv('core', fmtC(s.core_c)), kv('memory', fmtC(s.memj_c)), kv('fan', fmtPct(s.fan_pct)),
+        kv('core', fmtC(s.core_c)), kv('memory', fmtC(s.memj_c)), kv('hot spot', fmtC((s.extra || {}).hotspot_c)),
+        kv('fan', fmtPct(s.fan_pct)),
         kv('core clock', fmtNum(s.core_mhz) + (s.core_offset_mhz ? ` (${s.core_offset_mhz > 0 ? '+' : ''}${s.core_offset_mhz})` : '')),
         kv('mem clock', fmtNum(s.mem_mhz) + (s.mem_offset_mhz ? ` (+${s.mem_offset_mhz})` : '')),
         kv('shares', `${fmtNum(s.accepted)} / ${fmtNum(s.rejected)}`)),
@@ -202,7 +203,7 @@
     const specs = [
       { title: 'Hashrate', auto: 'hashrate', zero: true, area: true, series: [{ key: 'hashrate', label: 'hashrate', color: '--s1' }] },
       { title: 'Power', unit: 'W', zero: true, series: [{ key: 'power_w', label: 'draw', color: '--s1' }, { key: 'pl_w', label: 'limit', color: '--s2' }] },
-      { title: 'Temperature', unit: '°C', series: [{ key: 'core_c', label: 'core', color: '--s1' }, { key: 'memj_c', label: 'memory junction', color: '--s2' }] },
+      { title: 'Temperature', unit: '°C', series: [{ key: 'core_c', label: 'core', color: '--s1' }, { key: 'memj_c', label: 'memory junction', color: '--s2' }, { key: 'hotspot_c', label: 'hot spot', color: '--s3' }] },
       { title: 'Efficiency', auto: 'eff', zero: true, series: [{ key: 'eff', label: 'hashrate per watt', color: '--s1' }] },
       { title: 'Fan', unit: '%', zero: true, digits: 0, series: [{ key: 'fan_pct', label: 'fan', color: '--s1' }] },
       { title: 'Core clock', unit: 'MHz', digits: 0, series: [{ key: 'core_mhz', label: 'core', color: '--s1' }] },
@@ -233,7 +234,8 @@
       const tile = (label, value, sub) => h('div', { class: 'tile' }, h('div', { class: 'label' }, label), h('div', { class: 'value' }, value), sub ? h('div', { class: 'sub' }, sub) : null);
       const t = $('#tiles'); t.innerHTML = '';
       t.append(tile('Hashrate', fmtHR(s.hashrate), `shares ${fmtNum(s.accepted)} / ${fmtNum(s.rejected)} rej`), tile('Power', fmtW(s.power_w), `limit ${fmtW(s.pl_w)} · stock ${fmtW(g.stock_pl_w)}`),
-        tile('Efficiency', fmtEff(s.hashrate, s.power_w), ''), tile('Core', fmtC(s.core_c), `fan ${fmtPct(s.fan_pct)}`), tile('Memory junction', fmtC(s.memj_c), s.memj_c == null ? 'not exposed on this host' : ''),
+        tile('Efficiency', fmtEff(s.hashrate, s.power_w), ''), tile('Core', fmtC(s.core_c), `fan ${fmtPct(s.fan_pct)}${s.fan_rpm ? ' · ' + fmtNum(s.fan_rpm) + ' rpm' : ''}`),
+        tile('Memory junction', fmtC(s.memj_c), s.memj_c == null ? 'not exposed on this host' : ''), tile('Hot spot', fmtC((s.extra || {}).hotspot_c), (s.extra || {}).hotspot_c == null ? 'needs LibreHardwareMonitor' : 'throttles near 105 °C'),
         tile('Clocks', `${fmtNum(s.core_mhz)} / ${fmtNum(s.mem_mhz)}`, `offsets ${s.core_offset_mhz ?? '—'} / ${s.mem_offset_mhz ?? '—'} MHz`), tile('Sampled', fmtAge(s.ts), fmtTime(s.ts)));
       const p = $('#profile'); p.innerHTML = '';
       const kvs = h('div', { class: 'kvs' });

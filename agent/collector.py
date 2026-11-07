@@ -89,6 +89,10 @@ class Collector:
                 rpm = self._lhm.gpu_fan_rpm(n)
                 if rpm is not None:
                     s.fan_rpm = rpm                   # enables the real 0-RPM fan-failure rule
+            if self._lhm is not None:
+                hs = self._lhm.gpu_hotspot(n)
+                if hs is not None:
+                    s.extra["hotspot_c"] = hs         # kept in the extra JSON: no schema change
             out.append((info, s))
         return out
 

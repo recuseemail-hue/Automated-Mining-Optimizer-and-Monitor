@@ -65,6 +65,15 @@ class LhmReader:
         except ValueError:
             return None
 
+    def gpu_hotspot(self, ordinal: int = 0) -> float | None:
+        """'GPU Hot Spot' of the n-th GPU device (the temperature that throttles; NVML does not expose it)."""
+        t = self.tree()
+        if not t:
+            return None
+        hits = [self._value(node) for path, node in self._walk(t, [])
+                if not node.get("Children") and node.get("Text", "").lower().strip() == "gpu hot spot"]
+        return hits[ordinal] if ordinal < len(hits) else None
+
     def gpu_fan_rpm(self, ordinal: int = 0) -> float | None:
         """First fan RPM of the n-th GPU device (LHM 'GPU Fan 1' under the GPU node)."""
         t = self.tree()

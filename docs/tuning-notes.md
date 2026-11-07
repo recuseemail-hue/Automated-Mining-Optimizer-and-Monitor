@@ -44,3 +44,7 @@ to hand tuning back to the tool.
 unMiner runs SRBMiner with `--disable-worker-watchdog`: after a driver reset it stays up at 0 H/s. The
 watchdog treats "alive + 0 H/s for 10 min" as a failure and kills it so the app relaunches it
 (`miner.kill_stalled_external`).
+
+2026-11-07 after reboot (Afterburner not running, fan on auto curve, PL 400 W persisted): core 71 °C, **hot spot 86 °C**,
+memory junction 78 °C at 398 W, 1995 MHz, SRBMiner 132.6 TH/s. Hot spot is the number to manage in summer; Afterburner
+must start with Windows and apply the 80 % fan at startup, or the profile is lost on every reboot.

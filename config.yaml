@@ -164,6 +164,7 @@ claude:
 targets:
   core_c_max: 75
   memj_c_max: 100
+  hotspot_c_max: 90              # GPU hot spot (LibreHardwareMonitor); tuning trigger above this
   power_limit_pct_default: 70
 
 # Hard clamps for the action API (M2). Matched by substring of the GPU model name; first match wins.
@@ -212,6 +213,7 @@ watchdog:
   # catastrophic conditions (sustained for `sustain_s` before acting)
   core_c_crit: 85
   memj_c_crit: 105
+  hotspot_c_crit: 100            # sustained hot spot -> protective ladder (NVIDIA throttles ~105)
   sustain_s: 30
   core_c_hard: 95                # immediate stop + shutdown
   memj_c_hard: 110
