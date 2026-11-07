@@ -248,5 +248,27 @@ def serve(cfg: Config) -> None:
     host, port = str(cfg.get("hub.bind", "127.0.0.1")), int(cfg.get("hub.port", 8080))
     if host == "0.0.0.0":
         log.warning("hub.bind is 0.0.0.0: make sure the firewall limits this to the Tailscale interface")
+    _wait_for_address(host, port, timeout_s=float(cfg.get("hub.bind_wait_s", 900)))
     app = create_app(cfg)
     uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False, workers=1)
+
+
+def _wait_for_address(host: str, port: int, timeout_s: float = 900) -> None:
+    """At boot the Tailscale interface can appear after this service starts; wait for the bind address
+    instead of exiting (the scheduler would otherwise restart us once a minute until it gives up)."""
+    import socket
+    import time as _t
+    deadline = _t.time() + timeout_s
+    while True:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((host, port))
+            return
+        except OSError as e:
+            if _t.time() > deadline:
+                raise
+            log.warning("cannot bind %s:%s yet (%s); retrying in 10 s", host, port, e)
+            _t.sleep(10)
+        finally:
+            s.close()

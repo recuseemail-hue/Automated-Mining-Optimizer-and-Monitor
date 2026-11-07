@@ -476,6 +476,25 @@ def cmd_notify(args):
     print("sent" if ok else "not delivered now (queued or suppressed); check NTFY_TOPIC and the phone subscription")
 
 
+def cmd_lhm(args):
+    """Dump LibreHardwareMonitor's device tree (names + icons + sensor labels) to fix sensor matching."""
+    cfg = _ctx(args)
+    from .platform.windows import LhmReader
+    r = LhmReader(cfg.get("sensors.lhm_url"))
+    t = r.tree()
+    if not t:
+        print(f"no answer from {cfg.get('sensors.lhm_url')} (is the Remote Web Server running?)")
+        return 2
+    for path, node in r._walk(t, []):
+        kids = node.get("Children") or []
+        depth = len(path)
+        if kids and depth <= 2:
+            print("  " * depth + f"[{node.get('Text')}] icon={node.get('ImageURL')}")
+        elif not kids and any(k in "|".join(path).lower() for k in ("temperature", "fan", "power", "clock")):
+            print("  " * depth + f"{node.get('Text')} = {node.get('Value')}   (under {path[-1].split('|')[0]})")
+    print(f"cpu_c -> {cfg and __import__('agent.platform.windows', fromlist=['x']).WindowsPlatform(cfg).cpu_temp_c()}")
+
+
 def cmd_incidents(args):
     cfg = _ctx(args)
     db = Db(cfg.db_path)
@@ -605,6 +624,7 @@ def build_parser() -> argparse.ArgumentParser:
     nt.add_argument("sub", nargs="?", default="test", choices=["test"])
     nt.add_argument("--message")
     nt.set_defaults(fn=cmd_notify)
+    sub.add_parser("lhm", help="dump LibreHardwareMonitor's sensor tree (debug sensor matching)").set_defaults(fn=cmd_lhm)
     inc = sub.add_parser("incidents", help="recent incidents")
     inc.add_argument("--limit", type=int, default=20)
     inc.set_defaults(fn=cmd_incidents)

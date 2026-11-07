@@ -16,6 +16,7 @@ hub:
   bind: 127.0.0.1                # hub only: set to the Tailscale IP (100.x.y.z). Never 0.0.0.0 on a public NIC.
   port: 8080
   secure_cookies: false          # true when served via `tailscale serve` (HTTPS)
+  bind_wait_s: 900               # at boot, wait up to this long for the bind address (Tailscale) before failing
   session_days: 30
   login_lockout_s: 60            # after 5 failed logins per client
 
